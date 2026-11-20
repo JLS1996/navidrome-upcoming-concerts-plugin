@@ -1,0 +1,35 @@
+# Runtime data and credentials
+/test-runtime/
+/browser-results/
+/.cache/
+**/__pycache__/
+.env
+.env.*
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+auth.json
+state.json
+integrations.json
+covers.json
+navidrome.toml
+client.json
+client_secret*.json
+google-oauth*.json
+# Build-only and local test artifacts
+/internal/radar/provider_fixture.go
+/dist/*
+
+
+
+# Concert provider cache and temporary integration fixture
+ticketmaster.json
+tick.lock
+/internal/radar/concert_provider_fixture.go
+
+seatgeek.json
+
+skiddle.json

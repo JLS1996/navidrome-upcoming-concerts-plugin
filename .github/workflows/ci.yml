@@ -1,0 +1,41 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.4'
+          cache: true
+      - name: Test and vet
+        run: |
+          go test -race -cover ./...
+          go vet ./...
+      - name: Install pinned TinyGo
+        run: |
+          curl -fsSL https://github.com/tinygo-org/tinygo/releases/download/v0.40.1/tinygo0.40.1.linux-amd64.tar.gz -o "$RUNNER_TEMP/tinygo.tar.gz"
+          echo "064fc0c07f4d71f7369b168c337caa88ef32a6b00b16449cea44790ccadfc2b4  $RUNNER_TEMP/tinygo.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/tinygo.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/tinygo/bin" >> "$GITHUB_PATH"
+      - name: Build plugin
+        run: ./scripts/build.sh
+      - name: Verify Navidrome WASM integration
+        run: |
+          if ! command -v ffmpeg >/dev/null; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+          mkdir -p "$RUNNER_TEMP/navidrome"
+          curl -fsSL https://github.com/navidrome/navidrome/releases/download/v0.64.2/navidrome_0.64.2_linux_amd64.tar.gz -o "$RUNNER_TEMP/navidrome.tar.gz"
+          echo "fdd87fd107818667c2c50bc24dc6ce856962c795b3822a91f95c066cfad2c53e  $RUNNER_TEMP/navidrome.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/navidrome.tar.gz" -C "$RUNNER_TEMP/navidrome"
+          NAVIDROME_BIN="$RUNNER_TEMP/navidrome/navidrome" python3 scripts/test_concert_integration.py
+      - name: Check public files
+        run: python3 scripts/check_public.py --tracked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: navidrome-upcoming-concerts-plugin
+          path: dist/navidrome-upcoming-concerts-plugin.ndp
