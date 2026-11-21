@@ -21,15 +21,15 @@ func main() {
 	c.PastDays = 14
 	checked := now.Format(time.RFC3339)
 	s := radar.State{Schema: 1, Problem: "Demo report with fictional concerts.", Entries: []radar.Entry{
-		{Artist: radar.Artist{ID: "sample-1", Name: "Northbound"}, Phase: "done", CheckedAt: checked, Releases: []radar.Release{
+		{Artist: radar.Artist{ID: "sample-1", Name: "Northbound"}, ArtistWebsite: "https://northbound.example.org/", Phase: "done", CheckedAt: checked, Releases: []radar.Release{
 			{ID: "11111111-1111-4111-8111-111111111111", Title: "A Place in the Morning", Date: "2026-12-04", Type: "Concert", Venue: "Demo Hall, London"},
 			{ID: "22222222-2222-4222-8222-222222222222", Title: "Slow Light", Date: "2026-11-26", Type: "Concert", Venue: "Sample Arena, Berlin"},
 			{ID: "44444444-4444-4444-8444-444444444444", Title: "Winter Residency", Date: "2026-11-29", EndDate: "2026-12-02", Type: "Concert", Venue: "The Lantern, Brighton"},
 		}},
 		{Artist: radar.Artist{ID: "sample-2", Name: "Glass Orchard"}, Phase: "done", CheckedAt: checked, Releases: []radar.Release{
 			{ID: "33333333-3333-4333-8333-333333333333", Title: "Signals / After Hours", Date: "2026-12", Type: "Concert"},
-			{ID: "55555555-5555-4555-8555-555555555555", Title: "Marigold Sessions", Date: "2026-11-19", Type: "Concert", Venue: "Café Marigold, Paris"},
-			{ID: "66666666-6666-4666-8666-666666666666", Title: "Glasshouse Live", Date: "2026-11-16", Type: "Concert", Venue: "Sample Room, Dublin"},
+			{ID: "55555555-5555-4555-8555-555555555555", Title: "Marigold Sessions", Date: "2026-11-19", Type: "Concert", Venue: "Café Marigold, Paris", Country: "FR"},
+			{ID: "66666666-6666-4666-8666-666666666666", Title: "Glasshouse Live", Date: "2026-11-16", Type: "Concert", Venue: "Sample Room, Dublin", Country: "IE"},
 		}},
 		{Artist: radar.Artist{ID: "sample-3", Name: "Ambiguous sample artist"}, Phase: "unresolved", Problem: "Multiple artists share this name. Set an artist ID override."},
 	}}

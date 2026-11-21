@@ -21,7 +21,11 @@ var dashboardJS string
 
 type agendaShow struct {
 	reportRelease
-	timing, status, endDate, localTime string
+	timing, status, endDate, localTime, country string
+}
+
+type agendaArtist struct {
+	name, website string
 }
 
 func Render(s State, c Config, now time.Time) ([]byte, error) {
@@ -35,12 +39,20 @@ func render(s State, c Config, now time.Time, visible []reportRelease, events []
 	groups := map[string][]agendaShow{}
 	timings := map[string]bool{}
 	statuses := map[string]bool{}
-	var sourceNames []string
-	for _, r := range visible {
-		show := agendaShow{reportRelease: r, timing: "Upcoming", endDate: r.lastDay()}
-		if r.Concert != nil {
-			show.localTime = r.Concert.LocalTime
+	var sourceNames, countries []string
+	artistsByID := make(map[string]agendaArtist, len(s.Entries))
+	for _, entry := range s.Entries {
+		if IncludedArtist(entry.Artist, c) {
+			artistsByID[entry.Artist.ID] = agendaArtist{entry.Artist.Name, safeWebURL(entry.ArtistWebsite)}
 		}
+	}
+	for _, r := range visible {
+		concert := reportConcert(r)
+		show := agendaShow{
+			reportRelease: r, timing: "Upcoming", endDate: r.lastDay(),
+			localTime: concert.LocalTime, country: countryCode(concert.Country),
+		}
+		countries = append(countries, show.country)
 		switch {
 		case len(r.Date) < 10:
 			show.timing = "Date uncertain"
@@ -61,7 +73,7 @@ func render(s State, c Config, now time.Time, visible []reportRelease, events []
 		}
 		statuses[show.status] = true
 		timings[show.timing] = true
-		for _, source := range reportConcert(r).Sources {
+		for _, source := range concert.Sources {
 			sourceNames = append(sourceNames, source.Provider)
 		}
 		group := show.timing
@@ -71,7 +83,7 @@ func render(s State, c Config, now time.Time, visible []reportRelease, events []
 		groups[group] = append(groups[group], show)
 	}
 
-	var rows, timingOptions, sourceOptions strings.Builder
+	var rows, timingOptions, sourceOptions, countryOptions strings.Builder
 	for _, group := range []struct{ name, label string }{
 		{"Upcoming", "Upcoming"}, {"Recent", "Recent"}, {"Date uncertain", "Dates to be confirmed"},
 	} {
@@ -95,7 +107,7 @@ func render(s State, c Config, now time.Time, visible []reportRelease, events []
 		})
 		fmt.Fprintf(&rows, `<section class="agenda-group"><h2>%s</h2><div class="list">`, group.label)
 		for _, show := range shows {
-			writeAgendaShow(&rows, show)
+			writeAgendaShow(&rows, show, artistsByID)
 		}
 		rows.WriteString("</div></section>")
 		fmt.Fprintf(&timingOptions, `<option value="timing:%s">%s</option>`, group.name, group.label)
@@ -112,6 +124,13 @@ func render(s State, c Config, now time.Time, visible []reportRelease, events []
 	}
 	for _, name := range sortedUnique(sourceNames) {
 		fmt.Fprintf(&sourceOptions, `<option value="%s">%s</option>`, html.EscapeString(name), html.EscapeString(name))
+	}
+	for _, code := range sortedUnique(countries) {
+		fmt.Fprintf(&countryOptions, `<option value="%s">%s</option>`, code, code)
+	}
+	countryHidden := ""
+	if countryOptions.Len() == 0 {
+		countryHidden = "hidden"
 	}
 	complete, artists, pending, lookupDetails := lookupStatus(s, c, now)
 	problems := []string{s.Problem}
@@ -151,6 +170,8 @@ func render(s State, c Config, now time.Time, visible []reportRelease, events []
 		"@@WINDOW@@", window,
 		"@@PERIOD_OPTIONS@@", timingOptions.String(),
 		"@@SOURCE_OPTIONS@@", sourceOptions.String(),
+		"@@COUNTRY_OPTIONS@@", countryOptions.String(),
+		"@@COUNTRY_HIDDEN@@", countryHidden,
 		"@@EXPORT_HIDDEN@@", exportHidden,
 		"@@CALENDAR_TEXT@@", html.EscapeString(string(ics)),
 		"@@ICS@@", base64.StdEncoding.EncodeToString(ics),
@@ -175,41 +196,75 @@ func pluralConcerts(count int) string {
 	return "concerts"
 }
 
-func writeAgendaShow(rows *strings.Builder, show agendaShow) {
+func writeAgendaShow(rows *strings.Builder, show agendaShow, artistsByID map[string]agendaArtist) {
 	esc := html.EscapeString
-	sources := reportConcert(show.reportRelease).Sources
+	sources := orderedConcertSources(reportConcert(show.reportRelease).Sources)
 	names := make([]string, 0, len(sources))
 	for _, source := range sources {
 		names = append(names, source.Provider)
 	}
-	fmt.Fprintf(rows, `<article class="concert" data-timing="%s" data-status="%s" data-date="%s" data-end-date="%s" data-sources="%s">`,
-		show.timing, show.status, esc(show.Date), esc(show.endDate), esc(strings.Join(sortedUnique(names), "|")))
+	fmt.Fprintf(rows, `<article class="concert" data-timing="%s" data-status="%s" data-date="%s" data-end-date="%s" data-sources="%s" data-country="%s">`,
+		show.timing, show.status, esc(show.Date), esc(show.endDate), esc(strings.Join(sortedUnique(names), "|")), show.country)
 	if date, _, ok := DateInterval(show.Date); ok && len(show.Date) == 10 {
 		fmt.Fprintf(rows, `<time class="concert-date" datetime="%s" aria-label="%s"><span class="date-day">%s</span><span>%s</span></time>`,
 			esc(show.Date), date.Format("2 January 2006"), date.Format("2"), date.Format("Jan 2006"))
 	} else {
 		fmt.Fprintf(rows, `<div class="concert-date">%s</div>`, esc(DateLabel(show.Date)))
 	}
-	fmt.Fprintf(rows, `<div class="concert-body"><div class="concert-info"><div class="artist-line"><span class="artist">%s</span>`, esc(show.ArtistName))
+	rows.WriteString(`<div class="concert-body"><div class="artist-line">`)
+	writeAgendaArtists(rows, show, artistsByID)
 	if show.status != "" {
 		fmt.Fprintf(rows, `<span class="event-status" data-alert="%t">%s</span>`, show.status != "Rescheduled", show.status)
 	} else if show.timing == "Today" || show.timing == "Ongoing" {
 		fmt.Fprintf(rows, `<span class="event-status">%s</span>`, show.timing)
 	}
-	fmt.Fprintf(rows, "</div><h3>%s</h3>", esc(show.Title))
+	rows.WriteString("</div><h3>")
+	title := esc(show.Title)
+	for _, source := range sources {
+		if address := safeWebURL(source.URL); address != "" {
+			title = fmt.Sprintf(`<a href="%s" rel="noreferrer">%s</a>`, esc(address), title)
+			break
+		}
+	}
+	rows.WriteString(title)
+	rows.WriteString("</h3>")
 	if show.Venue != "" {
 		fmt.Fprintf(rows, `<p class="venue">%s</p>`, esc(show.Venue))
 	}
 	if details := concertDetails(show.Release); details != "" {
 		fmt.Fprintf(rows, `<p class="concert-details">%s</p>`, esc(details))
 	}
-	rows.WriteString(`</div><div class="listing">`)
 	rows.WriteString(concertSourcesHTML(sources))
 	if checked, err := time.Parse(time.RFC3339, show.CheckedAt); err == nil && checked.Unix() > 0 {
 		fmt.Fprintf(rows, `<p class="checked-at">Checked <time datetime="%s" title="%s">%s</time></p>`,
 			esc(show.CheckedAt), checked.UTC().Format("2 Jan 2006, 15:04 UTC"), checked.UTC().Format("2 Jan"))
 	}
-	rows.WriteString("</div></div></article>")
+	rows.WriteString("</div></article>")
+}
+
+func writeAgendaArtists(rows *strings.Builder, show agendaShow, artistsByID map[string]agendaArtist) {
+	websites := make(map[string]string, len(show.ArtistIDs))
+	for _, id := range show.ArtistIDs {
+		artist := artistsByID[id]
+		if previous, exists := websites[artist.name]; exists && previous != artist.website {
+			websites[artist.name] = ""
+		} else {
+			websites[artist.name] = artist.website
+		}
+	}
+
+	rows.WriteString(`<span class="artist">`)
+	for i, name := range show.ArtistNames {
+		if i > 0 {
+			rows.WriteString(" / ")
+		}
+		if website := websites[name]; website != "" {
+			fmt.Fprintf(rows, `<a href="%s" rel="noreferrer">%s</a>`, html.EscapeString(website), html.EscapeString(name))
+		} else {
+			rows.WriteString(html.EscapeString(name))
+		}
+	}
+	rows.WriteString("</span>")
 }
 
 func lookupStatus(s State, c Config, now time.Time) (complete, artists, pending int, details string) {

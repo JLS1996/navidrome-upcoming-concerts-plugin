@@ -78,3 +78,53 @@ func TestDeduplicationCanonicalURLAndMissingIdentity(t *testing.T) {
 		t.Fatal("merged unrelated artist identities")
 	}
 }
+
+func TestDeduplicationMatchesCountryNamesAndCodes(t *testing.T) {
+	s, c := duplicateFixture()
+	s.Ticketmaster.Artists[0].Concerts[0].Country = "CA"
+	s.SeatGeek.Artists[0].Concerts[0].Country = "Canada"
+	if got := len(visibleReleases(s, c, testNow)); got != 1 {
+		t.Fatalf("got %d listings for the same venue and country", got)
+	}
+}
+
+func TestDashboardLinksUseProviderPriority(t *testing.T) {
+	s, c := duplicateFixture()
+	rows := visibleReleases(s, c, testNow)
+	if len(rows) != 1 {
+		t.Fatalf("expected one merged listing, got %d", len(rows))
+	}
+	row := rows[0]
+	row.Concert.Sources = append([]ConcertSource{
+		{Provider: "Skiddle", URL: "https://skiddle.com/show/3"},
+		{Provider: "MusicBrainz", URL: "https://musicbrainz.org/event/2"},
+	}, row.Concert.Sources...)
+	for _, tc := range []struct{ ticketmaster, preferred string }{
+		{"https://www.ticketmaster.com/event/show", "https://www.ticketmaster.com/event/show"},
+		{"javascript:alert(1)", "https://seatgeek.com/show/1"},
+	} {
+		for i, source := range row.Concert.Sources {
+			if source.Provider == "Ticketmaster" {
+				row.Concert.Sources[i].URL = tc.ticketmaster
+			}
+		}
+		var output strings.Builder
+		writeAgendaShow(&output, agendaShow{reportRelease: row}, nil)
+		html := output.String()
+		if !strings.Contains(html, `<h3><a href="`+tc.preferred+`" rel="noreferrer">Show</a></h3>`) {
+			t.Fatalf("title does not use %s", tc.preferred)
+		}
+		listing := html[strings.Index(html, `class="concert-sources"`):]
+		previous := -1
+		for _, provider := range []string{"Ticketmaster", "SeatGeek", "MusicBrainz", "Skiddle"} {
+			position := strings.Index(listing, provider)
+			if position <= previous {
+				t.Fatalf("unexpected position for %s in %s", provider, listing)
+			}
+			previous = position
+		}
+		if strings.Contains(html, "javascript:") {
+			t.Fatal("an invalid provider URL reached the dashboard")
+		}
+	}
+}

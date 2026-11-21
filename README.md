@@ -9,7 +9,7 @@
 
 Discover **upcoming concerts by artists already in your [Navidrome](https://www.navidrome.org/) library**. Browse a private offline dashboard, explore a month calendar, and export your shows to a calendar app. MusicBrainz supplies supplementary events; optional SeatGeek, Skiddle and Ticketmaster adapters expand coverage.
 
-**[Download the plugin](https://github.com/JLS1996/navidrome-upcoming-concerts-plugin/releases/latest/download/navidrome-upcoming-concerts-plugin.ndp)** · [Setup guide](docs/installation.md) · [Provider configuration](docs/concert-providers.md) · [Release notes](docs/releases/v0.5.0.md)
+**[Download the plugin](https://github.com/JLS1996/navidrome-upcoming-concerts-plugin/releases/latest/download/navidrome-upcoming-concerts-plugin.ndp)** · [Setup guide](docs/installation.md) · [Provider configuration](docs/concert-providers.md) · [Release notes](docs/releases/v0.6.0.md)
 
 > [!IMPORTANT]
 > **AI-assisted development**
@@ -24,9 +24,9 @@ Discover **upcoming concerts by artists already in your [Navidrome](https://www.
 
 - **Artists from your library:** use only libraries accessible to the granted Navidrome user, with optional filtering for standalone artist credits.
 - **Multiple concert sources:** enable SeatGeek, Skiddle and Ticketmaster independently. No paid API subscription or LLM service is required by the plugin.
-- **Useful concert details:** show dates, supplied venue/location, ticket links, status and source attribution. Unknown dates and times stay unknown.
+- **Useful concert details:** open the show title for the preferred listing or pick a provider below the show time. Artist names link to official websites when MusicBrainz supplies one.
 - **Conservative deduplication:** merge clear cross-source matches while retaining all source links. Different show times and ambiguous matches stay separate; a setting lets you show sources separately.
-- **An offline concert agenda:** search by artist, show, venue or city, filter by timing, listing status or source, and browse a keyboard-accessible month calendar. Bright, dark and black themes are available.
+- **An offline concert agenda:** search by artist, show, venue or city, filter by timing, listing status, source or country, and browse a keyboard-accessible month calendar. Bright, dark and black themes are available.
 - **Calendars and optional alerts:** download `.ics`, or opt into ntfy, CalDAV or Google Calendar integrations.
 - **Resumable lookups:** persist artist mappings, pagination, request budgets and cached results. Failed refreshes retain the last completed snapshot.
 
@@ -59,7 +59,7 @@ Files are created under:
 
 For Docker or a different OS account, copy the files from the host/container or arrange private host-side file access. Opening the dashboard does not require a running companion service. [Installation and file access →](docs/installation.md)
 
-**Upgrading a test installation?** Replace the package and **keep plugin storage**. v0.4.0 reads v0.3 caches, preserves quota counters and rechecks useful cached artist candidates. No new audio scan or cache reset is needed. [Upgrade guide →](docs/upgrade-0.4.md)
+**Upgrading?** Replace the package and **keep plugin storage**. The next plugin run rebuilds the dashboard. Official artist websites appear as MusicBrainz checks finish. [Installation and upgrades →](docs/installation.md)
 
 ## Concert providers
 

@@ -14,7 +14,7 @@ func skConfig() SkiddleConfig {
 	return SkiddleConfig{Enabled: true, APIKey: "fixture-sk-key", DailyBudget: 2, Overrides: map[string]string{"ar-1": "456"}}
 }
 func skEventFixture() map[string]any {
-	return map[string]any{"id": "789", "eventname": "Fixture live show", "date": "2026-12-01", "enddate": "2026-12-02", "link": "https://www.skiddle.com/whats-on/fixture/789/?utm_source=skiddle", "cancelled": "0", "artists": []any{map[string]string{"artistid": "456"}}, "venue": map[string]string{"name": "Hall", "town": "London", "countrycode": "GB"}, "openingtimes": map[string]string{"doorsopen": "19:00"}}
+	return map[string]any{"id": "789", "eventname": "Fixture live show", "date": "2026-12-01", "enddate": "2026-12-02", "link": "https://www.skiddle.com/whats-on/fixture/789/?utm_source=skiddle", "cancelled": "0", "artists": []any{map[string]string{"artistid": "456"}}, "venue": map[string]string{"name": "Hall", "town": "London", "country": "GB"}, "openingtimes": map[string]string{"doorsopen": "19:00"}}
 }
 func skResponse(events ...map[string]any) Response {
 	b, _ := json.Marshal(map[string]any{"error": 0, "totalcount": len(events), "results": events})
@@ -42,7 +42,7 @@ func TestSkiddleReservationAttributionAndDoors(t *testing.T) {
 		t.Fatal(s)
 	}
 	concert := s.Artists[0].Concerts[0]
-	if concert.DoorsTime != "19:00" || concert.LocalTime != "" || concert.EndDate != "2026-12-02" {
+	if concert.DoorsTime != "19:00" || concert.LocalTime != "" || concert.EndDate != "2026-12-02" || concert.Country != "GB" {
 		t.Fatal("invented start time or lost range", concert)
 	}
 	if concert.Sources[0].URL != skEventFixture()["link"] {

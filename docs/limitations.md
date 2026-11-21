@@ -20,6 +20,8 @@
   If Navidrome unloads the plugin after all access is removed, existing report
   files remain in plugin storage until you remove them or enable the plugin with
   new grants.
-- Official-site extraction, geographic filtering and live-key coverage certification
-  are not implemented. Real calendar accounts and real-device sharing need
-  deployment checks beyond local fixtures.
+- The country filter uses the venue country supplied by a source. Listings
+  without country data appear under All countries. Official homepages depend on
+  artist relationships in MusicBrainz.
+- Real provider coverage, calendar accounts and device sharing need deployment
+  checks beyond local fixtures.

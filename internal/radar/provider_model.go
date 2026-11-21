@@ -94,6 +94,26 @@ func safeWebURL(raw string) string {
 	}
 	return u.String()
 }
+
+// Providers can report a country code or, in older SeatGeek caches, a name.
+func countryCode(country string) string {
+	code := strings.ToUpper(strings.TrimSpace(country))
+	switch code {
+	case "CANADA":
+		return "CA"
+	case "UK", "UNITED KINGDOM":
+		return "GB"
+	case "USA", "UNITED STATES", "UNITED STATES OF AMERICA":
+		return "US"
+	case "XX", "ZZ":
+		return ""
+	}
+	if len(code) == 2 && code[0] >= 'A' && code[0] <= 'Z' && code[1] >= 'A' && code[1] <= 'Z' {
+		return code
+	}
+	return ""
+}
+
 func (c Concert) reportRecord() Release {
 	return Release{ID: c.InternalID, Title: c.Title, Date: c.LocalDate, Type: "Concert", Venue: strings.Join(nonempty(c.Venue, c.City, c.Region, c.Country), ", "), Cancelled: c.Status == "cancelled", Concert: &c}
 }

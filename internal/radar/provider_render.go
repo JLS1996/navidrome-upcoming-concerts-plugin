@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html"
+	"sort"
 	"strings"
 	"time"
 )
@@ -115,6 +116,28 @@ func providerStatusHTML(s State, c Config, now time.Time) string {
 		b.WriteString("</ul></details>")
 	}
 	return b.String()
+}
+
+func orderedConcertSources(sources []ConcertSource) []ConcertSource {
+	priority := func(provider string) int {
+		switch provider {
+		case "Ticketmaster":
+			return 0
+		case "SeatGeek":
+			return 1
+		case "MusicBrainz":
+			return 2
+		case "Skiddle":
+			return 3
+		default:
+			return 4
+		}
+	}
+	ordered := append([]ConcertSource(nil), sources...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return priority(ordered[i].Provider) < priority(ordered[j].Provider)
+	})
+	return ordered
 }
 
 func concertSourcesHTML(sources []ConcertSource) string {
