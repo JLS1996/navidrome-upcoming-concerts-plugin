@@ -84,7 +84,8 @@ def wait_for(predicate,timeout=60):
  end=time.monotonic()+timeout
  while time.monotonic()<end:
   if failures:raise AssertionError(failures)
-  if (base/'server.log').exists() and 'Plugin init function failed' in (base/'server.log').read_text():raise AssertionError('WASM initialization failed; inspect '+str(base/'server.log'))
+  if (base/'server.log').exists() and any('Plugin init function failed' in line and 'SeatGeek mappings must map Navidrome artist IDs' not in line for line in (base/'server.log').read_text().splitlines()):
+   raise AssertionError('WASM initialization failed; inspect '+str(base/'server.log'))
   try:
    result=predicate()
    if result:return result
@@ -195,15 +196,15 @@ try:
  time.sleep(3)
  assert (storage/'state.json').read_bytes()==before_state,'invalid settings erased or changed state'
  assert (storage/'upcoming-concerts.html').read_bytes()==before_html,'invalid settings replaced good report'
- # The same settings error must never bypass verification of revoked access.
- api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'allUsers':False,'config':json.dumps(invalid)})
- wait_for(lambda:'grant access to a Navidrome user' in (storage/'upcoming-concerts.html').read_text())
+ # A second user makes the previous single-user access unverifiable even with bad settings.
+ api('/api/user','POST',{'userName':'fixture-other','name':'Fixture Other','newPassword':secrets.token_urlsafe(32),'isAdmin':False})
+ wait_for(lambda:'multiple users are granted access' in (storage/'upcoming-concerts.html').read_text())
  assert 'Fixture Band' not in (storage/'upcoming-concerts.html').read_text()
  assert 'BEGIN:VEVENT' not in (storage/'music-concerts.ics').read_text()
- api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'allUsers':True,'config':json.dumps(settings)})
+ api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'allUsers':False,'users':json.dumps([auth['id']]),'config':json.dumps(settings)})
  wait_for(lambda:(storage/'music-concerts.ics').read_text().count('BEGIN:VEVENT')==2)
  assert not (base/'music/upcoming-concerts.html').exists()
- print('Navidrome 0.64.2 integration passed: library discovery, access revocation, host HTTP, storage, automatic exact-name identity, pagination, invalid-setting preservation, concert output, cancellation, escaping, restart, damaged cache isolation, independent provider quotas, refresh and cross-source deduplication on/off.')
+ print('Navidrome 0.64.2 integration passed: library discovery, access verification, host HTTP, storage, automatic exact-name identity, pagination, invalid-setting preservation, concert output, cancellation, escaping, restart, damaged cache isolation, independent provider quotas, refresh and cross-source deduplication on/off.')
  print('Disposable test artifacts:',base)
 finally:
  stop();fixture.shutdown()

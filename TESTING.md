@@ -24,7 +24,7 @@ Synthetic regressions cover ambiguous/truncated identity searches, manual overri
 confirmation, partial/repeated/changed pages, midnight date-window pinning,
 ongoing multi-day concerts, newer reschedules outside the old display window,
 settings versus authorization scope, retry reset, secret redaction and safe writes.
-Additional checks cover access revocation with malformed settings, continued
+Additional checks cover ambiguous user grants with malformed settings, continued
 local scanning with a damaged integration cache, and ownership verification
 before calendar removal after an unconfirmed creation.
 
