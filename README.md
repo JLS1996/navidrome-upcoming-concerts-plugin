@@ -9,7 +9,7 @@
 
 Discover **upcoming concerts by artists already in your [Navidrome](https://www.navidrome.org/) library**. Browse a private offline dashboard, explore a month calendar, and export your shows to a calendar app. MusicBrainz supplies supplementary events; optional SeatGeek, Skiddle and Ticketmaster adapters expand coverage.
 
-**[Download the plugin](https://github.com/JLS1996/navidrome-upcoming-concerts-plugin/releases/latest/download/navidrome-upcoming-concerts-plugin.ndp)** · [Setup guide](docs/installation.md) · [Provider configuration](docs/concert-providers.md) · [Release notes](docs/releases/v0.4.0.md)
+**[Download the plugin](https://github.com/JLS1996/navidrome-upcoming-concerts-plugin/releases/latest/download/navidrome-upcoming-concerts-plugin.ndp)** · [Setup guide](docs/installation.md) · [Provider configuration](docs/concert-providers.md) · [Release notes](docs/releases/v0.4.1.md)
 
 > [!IMPORTANT]
 > **AI-assisted development**

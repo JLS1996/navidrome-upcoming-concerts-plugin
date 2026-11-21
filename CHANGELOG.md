@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 — 2026-11-21
+
+- Verify user and library access even when settings are invalid, and hide local
+  reports when their cached scope cannot be verified.
+- Keep MusicBrainz scans and local exports working when the integration cache
+  needs recovery.
+- Require an ownership check and ETag before removing an unconfirmed calendar
+  event. Defer removals while MusicBrainz lookups are failing.
 
 - Preserve multi-day ranges and cancellation status in Google Calendar sync;
   repair existing managed exports once without changing event identities.

@@ -1,7 +1,7 @@
 {
   "name": "navidrome-upcoming-concerts-plugin",
   "author": "navidrome-upcoming-concerts-plugin contributors",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Upcoming concerts from MusicBrainz for artists in your library, with an offline dashboard and calendar export. Community event coverage is limited.",
   "permissions": {
     "storage": {
