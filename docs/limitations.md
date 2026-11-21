@@ -17,6 +17,9 @@
   the remote allowance too. No paid provider or automatic upgrade is implemented.
 - Saved HTML is a snapshot and cannot retract copies after permission revocation.
   Keep reports private. Storage access/copying depends on deployment permissions.
+  If Navidrome unloads the plugin after all access is removed, existing report
+  files remain in plugin storage until you remove them or enable the plugin with
+  new grants.
 - Official-site extraction, geographic filtering and live-key coverage certification
   are not implemented. Real calendar accounts and real-device sharing need
   deployment checks beyond local fixtures.

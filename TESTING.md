@@ -1,4 +1,4 @@
-# Concert plugin 0.4.0 validation
+# Concert plugin validation
 
 Target: Navidrome 0.64.2 (10114574), Extism Go PDK 1.1.3,
 Go 1.25.4 and TinyGo 0.40.1.
@@ -24,6 +24,9 @@ Synthetic regressions cover ambiguous/truncated identity searches, manual overri
 confirmation, partial/repeated/changed pages, midnight date-window pinning,
 ongoing multi-day concerts, newer reschedules outside the old display window,
 settings versus authorization scope, retry reset, secret redaction and safe writes.
+Additional checks cover ambiguous user grants with malformed settings, continued
+local scanning with a damaged integration cache, and ownership verification
+before calendar removal after an unconfirmed creation.
 
 ## Reproduce
 

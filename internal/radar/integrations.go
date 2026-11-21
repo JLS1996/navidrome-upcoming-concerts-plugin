@@ -228,6 +228,18 @@ func (d *DeliveryState) ntfyStep(s State, c Config, ic IntegrationConfig, send S
 	}
 	return false
 }
+func calendarCanRemove(s State, c Config) bool {
+	if !FullCycle(s, c) {
+		return false
+	}
+	for _, entry := range s.Entries {
+		if entry.Phase == "error" && IncludedArtist(entry.Artist, c) {
+			return false
+		}
+	}
+	return true
+}
+
 func (d *DeliveryState) calendarStep(s State, c Config, ic IntegrationConfig, send Send, now time.Time) bool {
 	if ic.CalendarProvider == "" || ic.CalendarProvider == "none" {
 		delete(d.Problems, "calendar")
@@ -278,9 +290,11 @@ func (d *DeliveryState) calendarStep(s State, c Config, ic IntegrationConfig, se
 	for k := range desired {
 		keys = append(keys, k)
 	}
-	for k := range d.Remote {
-		if _, ok := desired[k]; !ok && FullCycle(s, c) {
-			keys = append(keys, k)
+	if len(d.Remote) > 0 && calendarCanRemove(s, c) {
+		for k := range d.Remote {
+			if _, ok := desired[k]; !ok {
+				keys = append(keys, k)
+			}
 		}
 	}
 	sort.Strings(keys)
@@ -298,7 +312,11 @@ func (d *DeliveryState) calendarStep(s State, c Config, ic IntegrationConfig, se
 			delete(d.Remote, uid)
 			continue
 		}
-		if record.Phase == "" {
+		if !wanted && record.ETag == "" {
+			// A queued creation may have reached the server without an acknowledgement.
+			// Recheck ownership and get an ETag before attempting a deletion.
+			record.Phase = "get"
+		} else if record.Phase == "" {
 			if record.ETag == "" {
 				record.Phase = "get"
 			} else {

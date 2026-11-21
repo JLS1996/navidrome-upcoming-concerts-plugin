@@ -22,6 +22,9 @@ servers require their hostname in the package's HTTP permission grants.
 Only events managed by this plugin are updated/deleted, with ownership and
 precondition checks. Incomplete or failing provider refreshes prevent destructive
 calendar reconciliation. Keep `integrations.json` to preserve acknowledgements.
+If that file is damaged, local scans and reports continue while remote delivery
+pauses. The dashboard reports the problem so you can restore the delivery state
+from a backup.
 Google and CalDAV preserve multi-day ranges and cancellation status. Google
 exports created by older versions are updated once using the existing event IDs;
 notification acknowledgements are preserved. Live accounts remain unverified in

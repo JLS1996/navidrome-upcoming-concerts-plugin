@@ -150,12 +150,8 @@ func (p *plugin) tick() error {
 	}
 	lock.Close()
 	defer os.Remove(lockPath)
-	s, err := radar.Load(dir)
-	if err != nil {
-		return err
-	}
-	c, configErr := config()
-	ic := integrationConfig(c)
+	s, stateErr := radar.Load(dir)
+	c := radar.DefaultConfig()
 	finish := func(problem error) error {
 		if problem != nil {
 			s.Problem = problem.Error()
@@ -165,19 +161,18 @@ func (p *plugin) tick() error {
 	hideUntilVerified := func(problem error) error {
 		// The prior snapshot stays private in storage and can only be published
 		// again after its access scope has been reverified.
-		if s.Problem == problem.Error() && s.RenderedAt == 0 {
+		if stateErr == nil && s.Problem == problem.Error() && s.RenderedAt == 0 {
 			return nil
 		}
 		if err := radar.SaveReports(dir, radar.State{Problem: problem.Error()}, c, now); err != nil {
 			return err
 		}
+		if stateErr != nil {
+			return stateErr
+		}
 		s.Problem = problem.Error()
 		s.RenderedAt = 0
 		return radar.SaveState(dir, s)
-	}
-	if configErr != nil {
-		// A typo in settings must not erase the last valid library snapshot.
-		return configErr
 	}
 	users, err := host.Users()
 	if err != nil {
@@ -187,13 +182,10 @@ func (p *plugin) tick() error {
 	for _, u := range users {
 		granted = append(granted, u.UserName)
 	}
-	c.Username, err = radar.ResolveUsername(granted)
+	username, err := radar.ResolveUsername(granted)
 	if err != nil {
-		s = radar.State{Schema: 1}
-		return finish(err)
+		return hideUntilVerified(err)
 	}
-	// Keep stable event identities tied to the granted Navidrome account.
-	ic = integrationConfig(c)
 	libs, err := host.Libraries()
 	if err != nil {
 		return hideUntilVerified(fmt.Errorf("unable to verify granted library access"))
@@ -202,7 +194,7 @@ func (p *plugin) tick() error {
 	for _, l := range libs {
 		ids = append(ids, int(l.ID))
 	}
-	rawFolders, err := host.Subsonic("getMusicFolders?u=" + url.QueryEscape(c.Username))
+	rawFolders, err := host.Subsonic("getMusicFolders?u=" + url.QueryEscape(username))
 	if err != nil {
 		return hideUntilVerified(fmt.Errorf("unable to verify current user library access"))
 	}
@@ -210,19 +202,32 @@ func (p *plugin) tick() error {
 	if err != nil {
 		return hideUntilVerified(err)
 	}
-	scope := radar.AccessScope(c.Username, ids)
-	if s.LookupConfig == "" && radar.SameAccessScope(s.Scope, c.Username, ids) {
+	if len(ids) == 0 {
+		return hideUntilVerified(fmt.Errorf("assign at least one library shared by the selected user and plugin"))
+	}
+	if stateErr != nil {
+		return hideUntilVerified(stateErr)
+	}
+	var configErr error
+	c, configErr = config()
+	if configErr != nil {
+		if !radar.SameAccessScope(s.Scope, username, ids) {
+			return hideUntilVerified(fmt.Errorf("correct the plugin settings to generate a report for the granted libraries"))
+		}
+		return configErr
+	}
+	// Keep stable event identities tied to the granted Navidrome account.
+	c.Username = username
+	ic := integrationConfig(c)
+	scope := radar.AccessScope(username, ids)
+	if s.LookupConfig == "" && radar.SameAccessScope(s.Scope, username, ids) {
 		if at := strings.LastIndex(s.Scope, "|["); at >= 0 {
 			s.LookupConfig = s.Scope[:at]
 		}
 	}
-	radar.MigrateScope(&s.Scope, c.Username, ids)
+	radar.MigrateScope(&s.Scope, username, ids)
 	if s.Scope != scope {
 		s = radar.State{Schema: 1, Scope: scope}
-	}
-	if len(ids) == 0 {
-		s = radar.State{Schema: 1}
-		return finish(fmt.Errorf("assign at least one library shared by the selected user and plugin"))
 	}
 	lookupConfig := c.Fingerprint()
 	if s.LookupConfig != lookupConfig {
@@ -340,13 +345,13 @@ func (p *plugin) tick() error {
 	viewChanged := s.ViewConfig != view
 	s.ViewConfig = view
 	d, loadErr := radar.LoadDeliveries(dir)
-	if loadErr != nil {
-		return finish(loadErr)
-	}
 	activeIntegrations, configurationProblem := ic.ValidParts()
+	deliver := func() bool {
+		return loadErr == nil && d.Step(s, c, activeIntegrations, send, now)
+	}
 	deliveryChanged := false
 	if d.PreferDelivery {
-		deliveryChanged = d.Step(s, c, activeIntegrations, send, now)
+		deliveryChanged = deliver()
 	}
 	changed := false
 	if !deliveryChanged {
@@ -355,7 +360,7 @@ func (p *plugin) tick() error {
 			return send(radar.HTTPRequest{Method: "GET", URL: endpoint, Headers: map[string]string{"User-Agent": ua, "Accept": "application/json"}})
 		}, c, now)
 		if !changed {
-			deliveryChanged = d.Step(s, c, activeIntegrations, send, now)
+			deliveryChanged = deliver()
 		}
 	}
 	if deliveryChanged {
@@ -365,7 +370,9 @@ func (p *plugin) tick() error {
 	}
 	previousIntegrationProblem := s.IntegrationProblem
 	s.IntegrationProblem = strings.Trim(strings.Join([]string{configurationProblem, d.Status()}, " · "), " ·")
-	if changed || deliveryChanged {
+	if loadErr != nil {
+		s.IntegrationProblem = loadErr.Error()
+	} else if changed || deliveryChanged {
 		if err = radar.SaveDeliveries(dir, d); err != nil {
 			return err
 		}

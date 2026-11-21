@@ -288,14 +288,46 @@ func TestCalendarDeletionWaitsForCompleteDiscovery(t *testing.T) {
 	}
 	d.Step(s, cfg(), ic, send, testNow)
 	d.Step(s, cfg(), ic, send, testNow.Add(3*time.Second))
-	s.Entries[0].Phase = "releases"
 	s.Entries[0].Releases = nil
-	calls := 0
-	d.Step(s, cfg(), ic, func(HTTPRequest) (Response, error) { calls++; return Response{}, nil }, testNow.Add(6*time.Second))
-	if calls != 0 {
-		t.Fatal("deleted events while source discovery incomplete")
+	for _, phase := range []string{"releases", "error"} {
+		s.Entries[0].Phase = phase
+		d.Step(s, cfg(), ic, func(r HTTPRequest) (Response, error) {
+			t.Fatalf("sent %s during incomplete MusicBrainz discovery (%s)", r.Method, phase)
+			return Response{}, nil
+		}, testNow.Add(6*time.Second))
 	}
 }
+
+func TestCalendarRemovalRechecksUnconfirmedCreation(t *testing.T) {
+	for _, provider := range []string{"caldav", "google"} {
+		t.Run(provider, func(t *testing.T) {
+			ic := icfg()
+			ic.CalendarProvider = provider
+			ic.CalDAVURL = "https://example.com/calendar"
+			ic.GoogleCalendarID = "fixture-calendar"
+			ic.GoogleClientID, ic.GoogleClientSecret, ic.GoogleRefreshToken = "fixture-client", "fixture-secret", "fixture-refresh"
+			d := DeliveryState{
+				AccessToken: "fixture-token", TokenExpiry: testNow.Add(time.Hour).Unix(),
+				GoogleAuth: digest(ic.GoogleClientID + "\x00" + ic.GoogleClientSecret + "\x00" + ic.GoogleRefreshToken),
+			}
+			s := published()
+			getMissing := func(r HTTPRequest) (Response, error) {
+				if r.Method != "GET" {
+					t.Fatalf("sent %s without confirming ownership and an ETag", r.Method)
+				}
+				return Response{Status: 404}, nil
+			}
+			if !d.Step(s, cfg(), ic, getMissing, testNow) || len(d.Remote) != 1 {
+				t.Fatal("expected a queued calendar creation")
+			}
+			s.Entries[0].Releases = nil
+			if !d.Step(s, cfg(), ic, getMissing, testNow.Add(3*time.Second)) || len(d.Remote) != 0 {
+				t.Fatal("expected missing remote event to be removed from the queue")
+			}
+		})
+	}
+}
+
 func TestIntegrationConfigurationAndFiles(t *testing.T) {
 	ic := icfg()
 	ic.NtfyTopic = "test"

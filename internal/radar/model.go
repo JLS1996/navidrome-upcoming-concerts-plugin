@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const Version = "0.4.0"
+const Version = "0.4.1"
 
 func MusicBrainzUserAgent() string {
 	return "navidrome-upcoming-concerts-plugin/" + Version + " (https://github.com/JLS1996/navidrome-upcoming-concerts-plugin)"
