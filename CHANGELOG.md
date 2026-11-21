@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 — 2026-11-21
+
+- Replace the inherited release dashboard with an offline concert agenda,
+  separate upcoming/recent/uncertain-date sections and a compact month calendar.
+- Search by artist, show, venue or city and filter by timing, listing status or
+  source. A matched concert remains findable under every contributing provider.
+- Keep Today and Ongoing shows in the Upcoming filter. Keep cancelled and
+  rescheduled listings in their correct timing groups.
+- Jump to the matching month when a calendar search finds dates elsewhere.
+  Preserve keyboard focus when moving between calendar days and months.
+- Preserve multi-day MusicBrainz dates in the agenda and calendar exports.
+- Remove the empty legacy Concerts settings tab. Move lookup diagnostics into
+  a disclosure below the report.
+
 ## 0.4.1 — 2026-11-21
 
 - Verify user and library access even when settings are invalid, and hide local

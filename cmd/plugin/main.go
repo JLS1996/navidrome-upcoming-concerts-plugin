@@ -341,7 +341,7 @@ func (p *plugin) tick() error {
 	if s.NextDiscovery == 0 {
 		s.Problem = strings.Join(providerProblems, " · ")
 	}
-	view := radar.Version + "/report-2/" + fmt.Sprintf("%d/%d", c.AheadDays, c.PastDays) + fmt.Sprint(c.Skiddle.Enabled, c.SeatGeek.Enabled, c.DeduplicateConcerts, c.Ticketmaster.Enabled, c.Theme, c.ProviderAutoMatch, c.ExcludeUncredited, s.Direct.At) + ic.Fingerprint() + radar.ProviderPublicationVersion(s, c)
+	view := radar.Version + "/report-3/" + fmt.Sprintf("%d/%d", c.AheadDays, c.PastDays) + fmt.Sprint(c.Skiddle.Enabled, c.SeatGeek.Enabled, c.DeduplicateConcerts, c.Ticketmaster.Enabled, c.Theme, c.ProviderAutoMatch, c.ExcludeUncredited, s.Direct.At) + ic.Fingerprint() + radar.ProviderPublicationVersion(s, c)
 	viewChanged := s.ViewConfig != view
 	s.ViewConfig = view
 	d, loadErr := radar.LoadDeliveries(dir)

@@ -17,29 +17,24 @@ const SkiddleLogoURL = "https://d1plawd8huk6hh.cloudfront.net/assets/logo/png/sk
 func skiddleLogoBase64() string { return base64.StdEncoding.EncodeToString(skiddleLogo) }
 
 func concertDetails(r Release) string {
-	if r.Concert == nil {
-		return "Source: MusicBrainz"
+	var details []string
+	if end := r.lastDay(); end != "" && end != r.Date {
+		details = append(details, "Through "+DateLabel(end))
 	}
-	e := r.Concert
-	details := []string{"Status: " + e.Status}
-	if e.EndDate != "" && e.EndDate != e.LocalDate {
-		details = append(details, "Through "+DateLabel(e.EndDate))
-	}
-	if e.DoorsTime != "" {
-		details = append(details, "Doors open: "+e.DoorsTime)
-	}
-	if e.LocalTime != "" {
-		details = append(details, "Local time: "+e.LocalTime+" "+e.Timezone)
-	}
-	for _, source := range e.Sources {
-		details = append(details, "Source: "+source.Provider)
+	if e := r.Concert; e != nil {
+		if e.LocalTime != "" {
+			details = append(details, "Starts "+strings.TrimSpace(e.LocalTime+" "+e.Timezone))
+		}
+		if e.DoorsTime != "" {
+			details = append(details, "Doors "+e.DoorsTime)
+		}
 	}
 	return strings.Join(details, " · ")
 }
 func providerStatusHTML(s State, c Config, now time.Time) string {
 	var b strings.Builder
 	for _, provider := range providerViews(s, c) {
-		fmt.Fprintf(&b, `<details class="notice provider-status" id="%s"><summary>%s lookup status</summary>`, provider.HTMLID, provider.Name)
+		fmt.Fprintf(&b, `<details class="provider-status" id="%s"><summary>%s lookup status</summary>`, provider.HTMLID, provider.Name)
 		if provider.State == nil {
 			b.WriteString(`<p>Provider state unavailable. No lookup has been confirmed.</p></details>`)
 			continue
@@ -122,25 +117,29 @@ func providerStatusHTML(s State, c Config, now time.Time) string {
 	return b.String()
 }
 
-func concertSourcesHTML(r Release) string {
-	if r.Concert == nil {
+func concertSourcesHTML(sources []ConcertSource) string {
+	if len(sources) == 0 {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(`<span class="concert-sources">`)
-	for _, source := range r.Concert.Sources {
-		if u := safeWebURL(source.URL); u != "" {
-			class := ""
-			if source.Provider == "Skiddle" {
-				class = "skiddle-source"
-			}
-			fmt.Fprintf(&b, `<a class="%s" href="%s" rel="noreferrer" aria-label="%s listing">`, class, html.EscapeString(u), html.EscapeString(source.Provider))
-			if source.Provider == "Skiddle" {
-				b.WriteString(`<span class="skiddle-logo" role="img" aria-label="Skiddle logo"></span>`)
-			}
-			fmt.Fprintf(&b, `<span>%s listing</span></a>`, html.EscapeString(source.Provider))
+	b.WriteString(`<div class="concert-sources">`)
+	for _, source := range sources {
+		name, address := html.EscapeString(source.Provider), safeWebURL(source.URL)
+		if address != "" {
+			fmt.Fprintf(&b, `<a href="%s" rel="noreferrer" aria-label="%s listing">`, html.EscapeString(address), name)
+		} else {
+			b.WriteString("<span>")
+		}
+		if source.Provider == "Skiddle" {
+			b.WriteString(`<span class="skiddle-logo" role="img" aria-label="Skiddle logo"></span>`)
+		}
+		b.WriteString(name)
+		if address != "" {
+			b.WriteString("</a>")
+		} else {
+			b.WriteString("</span>")
 		}
 	}
-	b.WriteString(`</span>`)
+	b.WriteString(`</div>`)
 	return b.String()
 }

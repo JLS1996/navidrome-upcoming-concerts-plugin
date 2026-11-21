@@ -1,66 +1,119 @@
 #!/usr/bin/env python3
-"""Offline smoke checks for the concert dashboard, without external services."""
+"""Exercise the offline agenda, calendar and export in Chromium."""
 from pathlib import Path
-from playwright.sync_api import sync_playwright
-root=Path(__file__).resolve().parents[1]
-with sync_playwright() as p:
-    browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
-    for width in [320,768,1280]:
-        page=browser.new_page(viewport={'width':width,'height':900})
-        errors=[]
-        page.on('pageerror',lambda e:errors.append(str(e)))
-        page.set_content((root/'dist/preview.html').read_text())
-        assert page.locator('article.concert').count()==3
-        assert page.locator('article.concert:visible').count()==3
-        page.locator('#search').fill('Demo Hall')
-        assert page.locator('article.concert:visible').count()==1
-        page.locator('#search').fill('')
-        page.get_by_role('button',name='Calendar',exact=True).click()
-        assert page.locator('#month-grid button').count()>=28
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),width
-        # Reuse fixture rows to exercise ranges crossing month boundaries and
-        # fully undated concerts without adding personal/provider data.
-        page.get_by_role('button',name='List',exact=True).click()
-        page.evaluate("""() => {
-            const rows = document.querySelectorAll('article.concert');
-            rows[0].dataset.date = '2026-10-30';
-            rows[0].dataset.endDate = '2026-12-02';
-            rows[0].querySelector('h2 a').removeAttribute('href');
-            document.querySelector('article.concert[data-date="2026-12-04"]').dataset.date = '';
-        }""")
-        page.get_by_role('button',name='Calendar',exact=True).click()
-        assert page.locator('#month-grid .has-concerts').count()==30
-        assert page.locator('#uncertain-list .uncertain-item').count()==1
-        page.locator('#month-grid button[data-date="2026-11-20"]').click()
-        assert page.locator('#day-concert-list article').count()==1
-        assert page.locator('#day-concert-list span.day-concert-title').count()==1
-        assert 'Source: MusicBrainz' in page.locator('#day-concert-list').inner_text()
-        page.locator('#next-month').click()
-        assert page.locator('#month-grid .has-concerts').count()==2
-        assert page.locator('#uncertain-list .uncertain-item').count()==2
-        page.locator('#search').fill('nonexistent concert')
-        assert page.locator('#month-grid .has-concerts').count()==0
-        assert page.locator('#uncertain-list .uncertain-item').count()==0
-        page.locator('#search').fill('')
-        page.screenshot(path=str(root/f'dist/preview-{width}.png'),full_page=True)
-        assert not errors,errors
+from shutil import which
+
+from playwright.sync_api import expect, sync_playwright
+
+ROOT = Path(__file__).resolve().parents[1]
+DIST = ROOT / "dist"
+DASHBOARD = (DIST / "preview-ticketmaster.html").read_text()
+
+
+def open_report(browser, width, theme="dark"):
+    page = browser.new_page(viewport={"width": width, "height": 1140})
+    page.set_content(DASHBOARD.replace('data-theme="dark"', f'data-theme="{theme}"', 1))
+    return page
+
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(
+        executable_path=which("chromium"), headless=True, args=["--no-sandbox"]
+    )
+    for width, theme in [(320, "dark"), (768, "bright"), (1280, "black")]:
+        page = browser.new_page(viewport={"width": width, "height": 900})
+        errors = []
+        requests = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on("request", lambda request: requests.append(request.url))
+        page.set_content(DASHBOARD.replace('data-theme="dark"', f'data-theme="{theme}"', 1))
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+        shows = page.locator("#agenda article.concert:visible")
+        search = page.get_by_role("searchbox", name="Search")
+        period = page.get_by_label("Timing or status")
+        source = page.get_by_label("Source")
+        clear = page.get_by_role("button", name="Clear filters")
+        expect(shows).to_have_count(9)
+        expect(shows.first).to_contain_text("Marigold Sessions")
+
+        search.fill("paris cafe")
+        expect(shows).to_have_count(1)
+        expect(shows.first).to_contain_text("Café Marigold, Paris")
+        expect(page.locator("#count")).to_have_text("1 concert")
+        clear.click()
+        expect(search).to_be_focused()
+        period.select_option("timing:Upcoming")
+        expect(shows).to_have_count(5)
+        expect(shows.first).to_contain_text("Today")
+        period.select_option("timing:Recent")
+        expect(shows).to_have_count(2)
+        expect(shows.first).to_contain_text("Cancelled")
+        period.select_option("status:Cancelled")
+        expect(shows).to_have_count(1)
+        clear.click()
+
+        # One merged listing is discoverable from each of its sources.
+        search.fill("winter tour")
+        for provider in ["SeatGeek", "Skiddle", "Ticketmaster"]:
+            source.select_option(provider)
+            expect(shows).to_have_count(1)
+            expect(shows.first.get_by_role("link", name=f"{provider} listing")).to_be_visible()
+        clear.click()
+
+        page.get_by_role("button", name="Calendar", exact=True).click()
+        grid = page.locator("#month-grid")
+        expect(page.locator("#month-label")).to_have_text("November 2026")
+        expect(grid.locator(".has-concerts")).to_have_count(6)
+        expect(page.locator("#uncertain-list .uncertain-item")).to_have_count(1)
+        expect(page.locator("#uncertain-list")).to_contain_text("Spring Sessions")
+        expect(page.locator("#uncertain-list").get_by_role("link")).to_have_count(0)
+        nov_30 = grid.locator('[data-date="2026-11-30"]')
+        nov_30.click()
+        expect(page.locator("#day-concert-list")).to_contain_text("Winter Residency")
+        nov_30.press("ArrowRight")
+        expect(page.locator("#month-label")).to_have_text("December 2026")
+        expect(grid.locator('[data-date="2026-12-01"]')).to_be_focused()
+        expect(page.locator("#day-concert-list")).to_contain_text("Through 2 December 2026")
+        expect(page.locator("#uncertain-list .uncertain-item")).to_have_count(2)
+
+        page.get_by_role("button", name="This month").click()
+        search.fill("demo hall london")
+        expect(page.locator("#month-label")).to_have_text("December 2026")
+        expect(page.locator("#day-concert-list")).to_contain_text("A Place in the Morning")
+        search.fill("nonexistent concert")
+        expect(grid.locator(".has-concerts")).to_have_count(0)
+        expect(page.locator("#uncertain-dates")).to_be_hidden()
+        clear.click()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+
+        # Browser filters leave the complete export intact.
+        search.fill("demo hall")
+        page.get_by_text("Export calendar", exact=True).click()
+        page.get_by_text("Show calendar text", exact=True).click()
+        calendar = page.locator("#calendar-text").input_value()
+        assert calendar.count("BEGIN:VEVENT") == 7
+        assert "DTEND;VALUE=DATE:20261203" in calendar
+        assert "STATUS:CANCELLED" in calendar
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+        if width == 1280:
+            with page.expect_download() as download:
+                page.get_by_role("link", name="Download .ics").click()
+            exported = download.value.path().read_bytes()
+            assert download.value.suggested_filename == "music-concerts.ics"
+            assert exported == calendar.replace("\n", "\r\n").encode()
+        assert not errors, errors
+        assert not any(url.startswith(("http:", "https:")) for url in requests), requests
         page.close()
-    page=browser.new_page(viewport={'width':320,'height':900})
-    page.set_content((root/'dist/preview-ticketmaster.html').read_text())
-    assert page.locator('article.concert').count()==4
-    page.locator('#provider-status summary').click()
-    assert 'Checked: no concerts found' in page.locator('#provider-status').inner_text()
-    assert 'Artist identity unresolved' in page.locator('#provider-status').inner_text()
-    assert 'Source: Ticketmaster' in page.locator('body').inner_text()
-    assert 'Source: Skiddle' in page.locator('body').inner_text()
-    assert page.get_by_role('link',name='Skiddle listing',exact=True).count()==1
-    assert 'Source: SeatGeek' in page.locator('body').inner_text()
-    assert page.get_by_role('link',name='SeatGeek listing',exact=True).count()==1
-    assert page.get_by_role('link',name='Ticketmaster listing',exact=True).count()==1
-    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-    page.locator('#search').fill('Demo theatre')
-    assert page.locator('article.concert:visible').count()==1
-    page.screenshot(path=str(root/'dist/preview-ticketmaster-320.png'),full_page=True)
-    page.close()
+
+    page = open_report(browser, 1280)
+    page.screenshot(path=str(DIST / "dashboard.png"))
+    page.get_by_role("button", name="Calendar", exact=True).click()
+    page.locator('#month-grid [data-date="2026-11-29"]').click()
+    page.screenshot(path=str(DIST / "calendar.png"), full_page=True)
+    page.get_by_text("Lookup status", exact=True).click()
+    page.locator("#provider-status summary").click()
+    expect(page.locator("#provider-status")).to_contain_text("Checked: no concerts found")
+    expect(page.locator("#provider-status")).to_contain_text("Artist identity unresolved")
     browser.close()
-print('Concert browser checks passed at 320, 768 and 1280 px')
+
+print("Concert agenda, calendar and exports passed in Chromium at 320, 768 and 1280 px.")

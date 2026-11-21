@@ -91,10 +91,13 @@ func TestManifestCredentialControlsRenderWithoutUnknownFormats(t *testing.T) {
 		}
 	}
 	walk(m.Config.UI)
-	for _, label := range []string{"General", "Concerts", "Integrations", "Matching"} {
+	for _, label := range []string{"General", "Concert providers", "Integrations", "Matching"} {
 		if !labels[label] {
 			t.Fatal("missing settings category", label)
 		}
+	}
+	if labels["Concerts"] {
+		t.Fatal("empty legacy concert settings tab remains")
 	}
 	for _, removed := range []string{"username", "contact", "export_library_id", "include_secondary", "refresh_token"} {
 		if _, exists := m.Config.Schema.Properties[removed]; exists {

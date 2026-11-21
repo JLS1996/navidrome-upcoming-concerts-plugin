@@ -9,7 +9,7 @@
 
 Discover **upcoming concerts by artists already in your [Navidrome](https://www.navidrome.org/) library**. Browse a private offline dashboard, explore a month calendar, and export your shows to a calendar app. MusicBrainz supplies supplementary events; optional SeatGeek, Skiddle and Ticketmaster adapters expand coverage.
 
-**[Download the plugin](https://github.com/JLS1996/navidrome-upcoming-concerts-plugin/releases/latest/download/navidrome-upcoming-concerts-plugin.ndp)** · [Setup guide](docs/installation.md) · [Provider configuration](docs/concert-providers.md) · [Release notes](docs/releases/v0.4.1.md)
+**[Download the plugin](https://github.com/JLS1996/navidrome-upcoming-concerts-plugin/releases/latest/download/navidrome-upcoming-concerts-plugin.ndp)** · [Setup guide](docs/installation.md) · [Provider configuration](docs/concert-providers.md) · [Release notes](docs/releases/v0.5.0.md)
 
 > [!IMPORTANT]
 > **AI-assisted development**
@@ -26,7 +26,7 @@ Discover **upcoming concerts by artists already in your [Navidrome](https://www.
 - **Multiple concert sources:** enable SeatGeek, Skiddle and Ticketmaster independently. No paid API subscription or LLM service is required by the plugin.
 - **Useful concert details:** show dates, supplied venue/location, ticket links, status and source attribution. Unknown dates and times stay unknown.
 - **Conservative deduplication:** merge clear cross-source matches while retaining all source links. Different show times and ambiguous matches stay separate; a setting lets you show sources separately.
-- **An offline dashboard:** search, timing filters, a responsive month calendar, and bright, dark or black themes.
+- **An offline concert agenda:** search by artist, show, venue or city, filter by timing, listing status or source, and browse a keyboard-accessible month calendar. Bright, dark and black themes are available.
 - **Calendars and optional alerts:** download `.ics`, or opt into ntfy, CalDAV or Google Calendar integrations.
 - **Resumable lookups:** persist artist mappings, pagination, request budgets and cached results. Failed refreshes retain the last completed snapshot.
 
@@ -109,6 +109,6 @@ Validation includes native race tests, actual Navidrome/WASM integration, config
 
 ## Credits and license
 
-Derived from [navidrome-upcoming-releases-plugin](https://github.com/JLS1996/navidrome-upcoming-releases-plugin), reusing its dashboard design, scoped library integration and calendar/notification foundations.
+Derived from [navidrome-upcoming-releases-plugin](https://github.com/JLS1996/navidrome-upcoming-releases-plugin), carrying forward its scoped library integration and calendar and notification foundations.
 
 Released under the [MIT License](LICENSE). Dependency and brand notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Concert data and provider trademarks remain subject to their respective terms.

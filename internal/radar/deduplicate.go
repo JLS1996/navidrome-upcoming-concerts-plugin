@@ -32,7 +32,7 @@ func reportConcert(r reportRelease) Concert {
 		c := *r.Concert
 		return c
 	}
-	return Concert{InternalID: r.ID, Title: r.Title, LocalDate: r.Date, Venue: r.Venue, Status: "unknown", Sources: []ConcertSource{{Provider: "MusicBrainz", EventID: r.ID, URL: r.SourceURL(), FetchedAt: r.CheckedAt}}}
+	return Concert{InternalID: r.ID, Title: r.Title, LocalDate: r.Date, EndDate: r.EndDate, Venue: r.Venue, Status: "unknown", Sources: []ConcertSource{{Provider: "MusicBrainz", EventID: r.ID, URL: r.SourceURL(), FetchedAt: r.CheckedAt}}}
 }
 func providersOf(c Concert) map[string]bool {
 	out := map[string]bool{}

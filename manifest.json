@@ -1,8 +1,8 @@
 {
   "name": "navidrome-upcoming-concerts-plugin",
   "author": "navidrome-upcoming-concerts-plugin contributors",
-  "version": "0.4.1",
-  "description": "Upcoming concerts from MusicBrainz for artists in your library, with an offline dashboard and calendar export. Community event coverage is limited.",
+  "version": "0.5.0",
+  "description": "Find concerts for artists in your library, browse an offline agenda or month calendar, and export to your calendar.",
   "permissions": {
     "storage": {
       "reason": "Save resumable concert checks and the local HTML dashboard"
@@ -309,7 +309,7 @@
             },
             {
               "type": "Label",
-              "text": "General controls appearance and library filters; Integrations contains alerts and calendars. Keep working JSON files private."
+              "text": "General controls appearance and library filters. Concert providers expand coverage. Keep working JSON files private."
             },
             {
               "type": "Label",
@@ -416,48 +416,6 @@
             },
             {
               "type": "Category",
-              "label": "Concerts",
-              "elements": [
-                {
-                  "type": "Group",
-                  "label": "Concert formats",
-                  "elements": []
-                },
-                {
-                  "type": "Label",
-                  "text": "\u00a0"
-                },
-                {
-                  "type": "Group",
-                  "label": "Standard and special concerts",
-                  "elements": [
-                    {
-                      "type": "Label",
-                      "text": "Choose concert formats above. For concerts with secondary tags, any selected tag below is enough to include the concert."
-                    },
-                    {
-                      "type": "Label",
-                      "text": "\u00a0"
-                    }
-                  ]
-                },
-                {
-                  "type": "Label",
-                  "text": "\u00a0"
-                },
-                {
-                  "type": "Group",
-                  "label": "Spoken and other recordings",
-                  "elements": []
-                },
-                {
-                  "type": "Label",
-                  "text": "\u00a0"
-                }
-              ]
-            },
-            {
-              "type": "Category",
               "label": "Integrations",
               "elements": [
                 {
@@ -466,7 +424,7 @@
                   "elements": [
                     {
                       "type": "Label",
-                      "text": "Enable ntfy, enter a server and topic, and subscribe to that topic in your ntfy app. Switching alerts off keeps your settings; all alerts follow your General and Concerts filters."
+                      "text": "Enable ntfy, enter a server and topic, and subscribe to that topic in your ntfy app. Switching alerts off keeps your settings; all alerts follow your report window and library filters."
                     },
                     {
                       "type": "Label",

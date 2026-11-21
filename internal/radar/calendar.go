@@ -67,10 +67,7 @@ func calendarEvents(visible []reportRelease, namespace string, exactOnly bool) [
 		if exactOnly && len(r.Date) != 10 {
 			continue
 		}
-		endDate := ""
-		if r.Concert != nil {
-			endDate = r.Concert.EndDate
-		}
+		endDate := r.endDate()
 		status := ""
 		if r.Cancelled {
 			status = "CANCELLED"
@@ -97,6 +94,8 @@ func calendarEvents(visible []reportRelease, namespace string, exactOnly bool) [
 			if r.Concert.LocalTime != "" {
 				description += ". Local time: " + r.Concert.LocalTime + " " + r.Concert.Timezone
 			}
+		} else if endDate != "" {
+			description += ". Through " + DateLabel(endDate)
 		}
 		result = append(result, CalendarEvent{EndDate: endDate, Status: status, Key: key, UID: "rr-" + digest(namespace+"\x00"+key) + "@concert-radar", Summary: r.ArtistName + " — " + r.Title, Date: r.Date, Description: description, URL: r.SourceURL()})
 	}

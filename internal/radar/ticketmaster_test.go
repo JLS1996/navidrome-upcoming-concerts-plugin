@@ -74,7 +74,7 @@ func TestTicketmasterDurablePaginationAndReports(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Show &lt;&amp;&gt;", "Hall &lt;&amp;&gt;, London, GB", "Source: Ticketmaster", "Status: cancelled", "2 / 4 locally reserved"} {
+	for _, want := range []string{"Show &lt;&amp;&gt;", "Hall &lt;&amp;&gt;, London, GB", `aria-label="Ticketmaster listing"`, `data-status="Cancelled"`, "2 / 4 locally reserved"} {
 		if !strings.Contains(string(html), want) {
 			t.Fatal("missing", want)
 		}

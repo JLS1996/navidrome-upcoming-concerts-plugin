@@ -12,8 +12,8 @@ import (
 func TestConcertSelectorsAndUTCWindow(t *testing.T) {
 	c := cfg()
 	b, _ := Render(published(), c, testNow)
-	if !strings.Contains(string(b), `<option value="Concert">`) || strings.Contains(string(b), `<option value="Album">`) {
-		t.Fatal("dashboard exposes release selectors")
+	if !strings.Contains(string(b), `<option value="MusicBrainz">`) || strings.Contains(string(b), `id="type"`) {
+		t.Fatal("dashboard should expose sources without the legacy release selector")
 	}
 	c.PastDays = 0
 	if Visible(Release{Type: "Concert", Date: "2026-11-19"}, c, time.Date(2026, 11, 19, 23, 30, 0, 0, time.FixedZone("local", -5*3600))) {

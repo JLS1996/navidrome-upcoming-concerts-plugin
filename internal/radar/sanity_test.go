@@ -73,10 +73,10 @@ func TestReportDetailsStayWithConcert(t *testing.T) {
 		}
 		for _, article := range articles {
 			article = strings.Split(article, "</article>")[0]
-			if strings.Contains(article, "scheduled show") && (!strings.Contains(article, "Status: scheduled") || strings.Contains(article, "21:00:00")) {
+			if strings.Contains(article, "<h3>scheduled show</h3>") && (!strings.Contains(article, `data-status=""`) || strings.Contains(article, "21:00:00")) {
 				t.Fatal("first concert inherited second concert details")
 			}
-			if strings.Contains(article, "postponed show") && (!strings.Contains(article, "Status: postponed") || strings.Contains(article, "18:00:00")) {
+			if strings.Contains(article, "<h3>postponed show</h3>") && (!strings.Contains(article, `data-status="Postponed"`) || strings.Contains(article, "18:00:00")) {
 				t.Fatal("second concert inherited first concert details")
 			}
 		}

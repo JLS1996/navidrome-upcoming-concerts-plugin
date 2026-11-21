@@ -13,15 +13,15 @@ import (
 //go:embed dashboard.html
 var dashboard string
 
-type row struct{ Artist, Title, Type, TypeLabel, Secondary, Date, DateLabel, URL, Status, CheckedAt, Details, Sources, EndDate string }
-type issue struct{ Name, ID, Message string }
-type report struct {
-	Generated                  string
-	Artists, Complete, Pending int
-	Rows                       []row
-	Issues                     []issue
-	Problem                    string
-	AheadDays, PastDays        int
+//go:embed dashboard.css
+var dashboardCSS string
+
+//go:embed dashboard.js
+var dashboardJS string
+
+type agendaShow struct {
+	reportRelease
+	timing, status, endDate, localTime string
 }
 
 func Render(s State, c Config, now time.Time) ([]byte, error) {
@@ -31,129 +31,210 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 }
 
 func render(s State, c Config, now time.Time, visible []reportRelease, events []CalendarEvent, ics []byte) ([]byte, error) {
-	p := report{Generated: now.UTC().Format("2 Jan 2006, 15:04 UTC"), Artists: 0, Problem: s.Problem, AheadDays: c.AheadDays, PastDays: c.PastDays}
-	today := now.UTC().Format("2006-01-02")
-	for _, e := range s.Entries {
-		if !IncludedArtist(e.Artist, c) {
+	today := now.UTC().Format(time.DateOnly)
+	groups := map[string][]agendaShow{}
+	timings := map[string]bool{}
+	statuses := map[string]bool{}
+	var sourceNames []string
+	for _, r := range visible {
+		show := agendaShow{reportRelease: r, timing: "Upcoming", endDate: r.lastDay()}
+		if r.Concert != nil {
+			show.localTime = r.Concert.LocalTime
+		}
+		switch {
+		case len(r.Date) < 10:
+			show.timing = "Date uncertain"
+		case show.endDate < today:
+			show.timing = "Recent"
+		case r.Date == today:
+			show.timing = "Today"
+		case r.Date < today:
+			show.timing = "Ongoing"
+		}
+		switch {
+		case r.Cancelled:
+			show.status = "Cancelled"
+		case r.Concert != nil && r.Concert.Status == "postponed":
+			show.status = "Postponed"
+		case r.Concert != nil && r.Concert.Status == "rescheduled":
+			show.status = "Rescheduled"
+		}
+		statuses[show.status] = true
+		timings[show.timing] = true
+		for _, source := range reportConcert(r).Sources {
+			sourceNames = append(sourceNames, source.Provider)
+		}
+		group := show.timing
+		if group == "Today" || group == "Ongoing" {
+			group = "Upcoming"
+		}
+		groups[group] = append(groups[group], show)
+	}
+
+	var rows, timingOptions, sourceOptions strings.Builder
+	for _, group := range []struct{ name, label string }{
+		{"Upcoming", "Upcoming"}, {"Recent", "Recent"}, {"Date uncertain", "Dates to be confirmed"},
+	} {
+		shows := groups[group.name]
+		if len(shows) == 0 {
 			continue
 		}
-		p.Artists++
-		if e.Phase == "done" {
-			p.Complete++
-		} else if e.Phase == "match" || e.Phase == "releases" {
-			p.Pending++
+		sort.SliceStable(shows, func(i, j int) bool {
+			a, b := shows[i], shows[j]
+			if a.Date != b.Date {
+				if group.name == "Recent" {
+					return a.Date > b.Date
+				}
+				// Place listings without even a partial date at the end.
+				return b.Date == "" || (a.Date != "" && a.Date < b.Date)
+			}
+			if a.localTime != b.localTime {
+				return b.localTime == "" || (a.localTime != "" && a.localTime < b.localTime)
+			}
+			return strings.ToLower(a.ArtistName+a.Title) < strings.ToLower(b.ArtistName+b.Title)
+		})
+		fmt.Fprintf(&rows, `<section class="agenda-group"><h2>%s</h2><div class="list">`, group.label)
+		for _, show := range shows {
+			writeAgendaShow(&rows, show)
 		}
-		if e.Problem != "" {
-			p.Issues = append(p.Issues, issue{e.Artist.Name, e.Artist.ID, e.Problem})
+		rows.WriteString("</div></section>")
+		fmt.Fprintf(&timingOptions, `<option value="timing:%s">%s</option>`, group.name, group.label)
+	}
+	for _, timing := range []string{"Today", "Ongoing"} {
+		if timings[timing] {
+			fmt.Fprintf(&timingOptions, `<option value="timing:%s">%s</option>`, timing, timing)
 		}
 	}
-	for _, r := range visible {
-		endDate := ""
-		_, end, _ := r.dateRange()
-		if len(r.Date) == 10 {
-			endDate = end.Format("2006-01-02")
+	for _, status := range []string{"Cancelled", "Postponed", "Rescheduled"} {
+		if statuses[status] {
+			fmt.Fprintf(&timingOptions, `<option value="status:%s">%s</option>`, status, status)
 		}
-		status := "Upcoming"
-		if len(r.Date) < 10 {
-			status = "Date uncertain"
-		} else if end.Format("2006-01-02") < today {
-			status = "Recent"
-		} else if r.Date == today {
-			status = "Today"
-		} else if r.Date < today && end.Format("2006-01-02") >= today {
-			status = "Ongoing"
-		}
-		if r.Cancelled {
-			status = "Cancelled"
-		} else if r.Concert != nil && r.Concert.Status == "postponed" {
-			status = "Postponed"
-		} else if r.Concert != nil && r.Concert.Status == "rescheduled" {
-			status = "Rescheduled"
-		}
-		p.Rows = append(p.Rows, row{Details: concertDetails(r.Release), Sources: concertSourcesHTML(r.Release), EndDate: endDate, Artist: r.ArtistName, Title: r.Title + venueSuffix(r.Venue), Type: r.PrimaryType(), TypeLabel: r.TypeLabel(), Secondary: strings.Join(r.Secondary, "|"), Date: r.Date, DateLabel: DateLabel(r.Date), URL: r.SourceURL(), Status: status, CheckedAt: r.CheckedAt})
 	}
-	sort.SliceStable(p.Rows, func(i, j int) bool {
-		a, b := p.Rows[i], p.Rows[j]
-		if a.Date == b.Date {
-			return strings.ToLower(a.Artist+a.Title) < strings.ToLower(b.Artist+b.Title)
-		}
-		return a.Date < b.Date
-	})
-	// Avoid text/template reflection, unsupported by TinyGo 0.40.1 at runtime.
-	esc := html.EscapeString
-	var rows, issues strings.Builder
-	for _, r := range p.Rows {
-		checked := r.CheckedAt
-		if t, err := time.Parse(time.RFC3339, checked); err == nil {
-			checked = t.UTC().Format("2 Jan 2006, 15:04 UTC")
-		}
-		title := esc(r.Title)
-		if r.URL != "" {
-			title = fmt.Sprintf(`<a href="%s" rel="noreferrer">%s</a>`, esc(r.URL), title)
-		}
-		fmt.Fprintf(&rows, `<article class="concert" data-type="%s" data-secondary="%s" data-period="%s" data-date="%s" data-end-date="%s"><div class="concert-date date">%s<br><span class="meta">%s</span></div><div class="concert-body"><div class="artist">%s</div><h2>%s</h2><div class="meta">Last checked:<br><time>%s</time></div></div><span class="tag">%s</span><div class="meta concert-details">%s%s</div></article>`, esc(r.Type), esc(r.Secondary), esc(r.Status), esc(r.Date), esc(r.EndDate), esc(r.DateLabel), esc(r.Status), esc(r.Artist), title, esc(checked), esc(r.TypeLabel), esc(r.Details), r.Sources)
+	for _, name := range sortedUnique(sourceNames) {
+		fmt.Fprintf(&sourceOptions, `<option value="%s">%s</option>`, html.EscapeString(name), html.EscapeString(name))
 	}
-	if len(p.Issues) > 0 {
-		summary := fmt.Sprintf("%d artists need attention", len(p.Issues))
-		if len(p.Issues) == 1 {
-			summary = "1 artist needs attention"
-		}
-		fmt.Fprintf(&issues, `<details><summary>%s</summary><ul>`, summary)
-		for _, i := range p.Issues {
-			fmt.Fprintf(&issues, `<li><strong>%s</strong> · Navidrome ID <code>%s</code><br>%s</li>`, esc(i.Name), esc(i.ID), esc(i.Message))
-		}
-		issues.WriteString("</ul></details>")
-	}
+	complete, artists, pending, lookupDetails := lookupStatus(s, c, now)
+	problems := []string{s.Problem}
 	if s.MusicBrainzProblem != "" {
 		retry := time.Unix(s.NextHTTP, 0).UTC().Format("2 Jan 2006, 15:04:05 UTC")
-		status := s.MusicBrainzProblem + ". Checks paused; automatic retry after " + retry + ". Existing results are kept."
-		if p.Problem != "" {
-			p.Problem += " · "
-		}
-		p.Problem += status
+		problems = append(problems, s.MusicBrainzProblem+". Checks paused. Automatic retry after "+retry+". Existing results are kept.")
+	}
+	if s.IntegrationProblem != "" {
+		problems = append(problems, "Integration status: "+s.IntegrationProblem)
 	}
 	problem := ""
-	if s.IntegrationProblem != "" {
-		if p.Problem != "" {
-			p.Problem += " · "
-		}
-		p.Problem += "Integration status: " + s.IntegrationProblem
+	if text := strings.Join(nonempty(problems...), " · "); text != "" {
+		problem = `<p class="notice" role="status">` + html.EscapeString(text) + "</p>"
 	}
-	if p.Problem != "" {
-		problem = `<div class="notice" role="status">` + esc(p.Problem) + `</div>`
-	}
-	hidden := ""
-	if len(p.Rows) > 0 {
-		hidden = "hidden"
-	}
-	emptyNote := ""
+
+	exportHidden, emptyHidden := "", ""
 	if len(events) == 0 {
-		emptyNote = `<p class="notice">No dated calendar events yet. Importing this calendar will add nothing. Checks may still be running, or no exact concert dates fall within your filters.</p>`
+		exportHidden = "hidden"
 	}
-	var typeOptions, periodOptions strings.Builder
-	availableTypes, availablePeriods := map[string]bool{}, map[string]bool{}
-	for _, r := range p.Rows {
-		availableTypes[r.Type] = true
-		for _, tag := range strings.Split(r.Secondary, "|") {
-			if tag != "" {
-				availableTypes[tag] = true
-			}
-		}
-		availablePeriods[r.Status] = true
+	if len(visible) > 0 {
+		emptyHidden = "hidden"
 	}
-	if availableTypes["Concert"] {
-		typeOptions.WriteString(`<option value="Concert">Concert</option>`)
+	window := fmt.Sprintf("Next %d days", c.AheadDays)
+	if c.PastDays > 0 {
+		window += fmt.Sprintf(" and previous %d days", c.PastDays)
 	}
-	for _, period := range []string{"Upcoming", "Today", "Ongoing", "Recent", "Date uncertain", "Cancelled", "Postponed", "Rescheduled"} {
-		if availablePeriods[period] {
-			fmt.Fprintf(&periodOptions, `<option value="%s">%s</option>`, period, period)
-		}
-	}
-	// NewReplacer makes a single pass: inserted metadata is never interpreted as a template.
 	theme := c.Theme
 	if theme != "bright" && theme != "black" {
 		theme = "dark"
 	}
-	result := strings.NewReplacer("@@SKIDDLE_LOGO@@", skiddleLogoBase64(), "@@THEME@@", theme, "@@PERIOD_OPTIONS@@", periodOptions.String(), "@@TYPE_OPTIONS@@", typeOptions.String(), "@@CALENDAR_EMPTY_NOTE@@", emptyNote, "@@CALENDAR_TEXT@@", esc(string(ics)), "@@ICS@@", base64.StdEncoding.EncodeToString(ics), "@@CALENDAR_STATS@@", esc(calendarStats(len(visible), len(events))), "@@TODAY@@", now.UTC().Format("2006-01-02"), "@@COUNT@@", fmt.Sprint(len(p.Rows)), "@@COMPLETE@@", fmt.Sprint(p.Complete), "@@ARTISTS@@", fmt.Sprint(p.Artists), "@@PENDING@@", fmt.Sprint(p.Pending), "@@PAST@@", fmt.Sprint(p.PastDays), "@@AHEAD@@", fmt.Sprint(p.AheadDays), "@@GENERATED@@", esc(p.Generated), "@@PROBLEM@@", problem+providerStatusHTML(s, c, now), "@@ROWS@@", rows.String(), "@@ISSUES@@", issues.String(), "@@EMPTYHIDDEN@@", hidden).Replace(dashboard)
+	// A single replacement pass keeps inserted metadata from being interpreted as a template.
+	result := strings.NewReplacer(
+		"@@CSS@@", strings.ReplaceAll(dashboardCSS, "@@SKIDDLE_LOGO@@", skiddleLogoBase64()),
+		"@@JS@@", dashboardJS,
+		"@@THEME@@", theme,
+		"@@GENERATED@@", now.UTC().Format("2 Jan 2006, 15:04 UTC"),
+		"@@WINDOW@@", window,
+		"@@PERIOD_OPTIONS@@", timingOptions.String(),
+		"@@SOURCE_OPTIONS@@", sourceOptions.String(),
+		"@@EXPORT_HIDDEN@@", exportHidden,
+		"@@CALENDAR_TEXT@@", html.EscapeString(string(ics)),
+		"@@ICS@@", base64.StdEncoding.EncodeToString(ics),
+		"@@CALENDAR_STATS@@", html.EscapeString(calendarStats(len(visible), len(events))),
+		"@@TODAY@@", today,
+		"@@COUNT@@", fmt.Sprint(len(visible), " ", pluralConcerts(len(visible))),
+		"@@COMPLETE@@", fmt.Sprint(complete),
+		"@@ARTISTS@@", fmt.Sprint(artists),
+		"@@PENDING@@", fmt.Sprint(pending),
+		"@@PROBLEM@@", problem,
+		"@@ROWS@@", rows.String(),
+		"@@ISSUES@@", lookupDetails,
+		"@@EMPTYHIDDEN@@", emptyHidden,
+	).Replace(dashboard)
 	return []byte(result), nil
+}
+
+func pluralConcerts(count int) string {
+	if count == 1 {
+		return "concert"
+	}
+	return "concerts"
+}
+
+func writeAgendaShow(rows *strings.Builder, show agendaShow) {
+	esc := html.EscapeString
+	sources := reportConcert(show.reportRelease).Sources
+	names := make([]string, 0, len(sources))
+	for _, source := range sources {
+		names = append(names, source.Provider)
+	}
+	fmt.Fprintf(rows, `<article class="concert" data-timing="%s" data-status="%s" data-date="%s" data-end-date="%s" data-sources="%s">`,
+		show.timing, show.status, esc(show.Date), esc(show.endDate), esc(strings.Join(sortedUnique(names), "|")))
+	if date, _, ok := DateInterval(show.Date); ok && len(show.Date) == 10 {
+		fmt.Fprintf(rows, `<time class="concert-date" datetime="%s" aria-label="%s"><span class="date-day">%s</span><span>%s</span></time>`,
+			esc(show.Date), date.Format("2 January 2006"), date.Format("2"), date.Format("Jan 2006"))
+	} else {
+		fmt.Fprintf(rows, `<div class="concert-date">%s</div>`, esc(DateLabel(show.Date)))
+	}
+	fmt.Fprintf(rows, `<div class="concert-body"><div class="concert-info"><div class="artist-line"><span class="artist">%s</span>`, esc(show.ArtistName))
+	if show.status != "" {
+		fmt.Fprintf(rows, `<span class="event-status" data-alert="%t">%s</span>`, show.status != "Rescheduled", show.status)
+	} else if show.timing == "Today" || show.timing == "Ongoing" {
+		fmt.Fprintf(rows, `<span class="event-status">%s</span>`, show.timing)
+	}
+	fmt.Fprintf(rows, "</div><h3>%s</h3>", esc(show.Title))
+	if show.Venue != "" {
+		fmt.Fprintf(rows, `<p class="venue">%s</p>`, esc(show.Venue))
+	}
+	if details := concertDetails(show.Release); details != "" {
+		fmt.Fprintf(rows, `<p class="concert-details">%s</p>`, esc(details))
+	}
+	rows.WriteString(`</div><div class="listing">`)
+	rows.WriteString(concertSourcesHTML(sources))
+	if checked, err := time.Parse(time.RFC3339, show.CheckedAt); err == nil && checked.Unix() > 0 {
+		fmt.Fprintf(rows, `<p class="checked-at">Checked <time datetime="%s" title="%s">%s</time></p>`,
+			esc(show.CheckedAt), checked.UTC().Format("2 Jan 2006, 15:04 UTC"), checked.UTC().Format("2 Jan"))
+	}
+	rows.WriteString("</div></div></article>")
+}
+
+func lookupStatus(s State, c Config, now time.Time) (complete, artists, pending int, details string) {
+	var issues strings.Builder
+	issueCount := 0
+	for _, e := range s.Entries {
+		if !IncludedArtist(e.Artist, c) {
+			continue
+		}
+		artists++
+		switch e.Phase {
+		case "done":
+			complete++
+		case "match", "releases":
+			pending++
+		}
+		if e.Problem != "" {
+			issueCount++
+			fmt.Fprintf(&issues, `<li><strong>%s</strong> · Navidrome ID <code>%s</code><br>%s</li>`,
+				html.EscapeString(e.Artist.Name), html.EscapeString(e.Artist.ID), html.EscapeString(e.Problem))
+		}
+	}
+	if issueCount > 0 {
+		label := fmt.Sprintf("MusicBrainz issues (%d)", issueCount)
+		details = "<details><summary>" + label + "</summary><ul>" + issues.String() + "</ul></details>"
+	}
+	return complete, artists, pending, details + providerStatusHTML(s, c, now)
 }
