@@ -146,7 +146,8 @@ type skiddleEvent struct {
 		ID         wireInt `json:"artistid"`
 		FallbackID wireInt `json:"id"`
 	} `json:"artists"`
-	Venue        struct{ Name, Town, Countrycode string } `json:"venue"`
+	Country      string                                            `json:"country"`
+	Venue        struct{ Name, Town, Countrycode, Country string } `json:"venue"`
 	OpeningTimes struct {
 		DoorsOpen string `json:"doorsopen"`
 	} `json:"openingtimes"`
@@ -192,7 +193,12 @@ func (a *ProviderArtist) skiddleEvents(body []byte, now time.Time) error {
 		}
 		id := strconv.FormatInt(int64(e.ID), 10)
 		at := now.UTC().Format(time.RFC3339)
-		event := Concert{InternalID: "skiddle:" + id, ArtistIDs: []string{a.Artist.ID}, Title: e.Name, Venue: e.Venue.Name, City: e.Venue.Town, Country: e.Venue.Countrycode, Status: "unknown", DatePrecision: "unknown", FirstSeenAt: at, LastSeenAt: at}
+		event := Concert{InternalID: "skiddle:" + id, ArtistIDs: []string{a.Artist.ID}, Title: e.Name, Venue: e.Venue.Name, City: e.Venue.Town, Status: "unknown", DatePrecision: "unknown", FirstSeenAt: at, LastSeenAt: at}
+		for _, location := range []string{e.Venue.Countrycode, e.Venue.Country, e.Country} {
+			if event.Country = countryCode(location); event.Country != "" {
+				break
+			}
+		}
 		if e.Cancelled {
 			event.Status = "cancelled"
 		}

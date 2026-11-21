@@ -32,7 +32,7 @@ func reportConcert(r reportRelease) Concert {
 		c := *r.Concert
 		return c
 	}
-	return Concert{InternalID: r.ID, Title: r.Title, LocalDate: r.Date, EndDate: r.EndDate, Venue: r.Venue, Status: "unknown", Sources: []ConcertSource{{Provider: "MusicBrainz", EventID: r.ID, URL: r.SourceURL(), FetchedAt: r.CheckedAt}}}
+	return Concert{InternalID: r.ID, Title: r.Title, LocalDate: r.Date, EndDate: r.EndDate, Venue: r.Venue, Country: r.Country, Status: "unknown", Sources: []ConcertSource{{Provider: "MusicBrainz", EventID: r.ID, URL: r.SourceURL(), FetchedAt: r.CheckedAt}}}
 }
 func providersOf(c Concert) map[string]bool {
 	out := map[string]bool{}
@@ -41,6 +41,13 @@ func providersOf(c Concert) map[string]bool {
 	}
 	return out
 }
+func matchCountry(country string) string {
+	if code := countryCode(country); code != "" {
+		return code
+	}
+	return matchText(country)
+}
+
 func sameShow(a, b reportRelease) bool {
 	ac, bc := reportConcert(a), reportConcert(b)
 	for provider := range providersOf(ac) {
@@ -83,7 +90,8 @@ func sameShow(a, b reportRelease) bool {
 			return true
 		}
 	}
-	return len(ac.LocalDate) == 10 && ac.LocalDate == bc.LocalDate && ac.Venue != "" && ac.City != "" && ac.Country != "" && matchText(ac.Venue) == matchText(bc.Venue) && matchText(ac.City) == matchText(bc.City) && matchText(ac.Country) == matchText(bc.Country) && (ac.Region == "" || bc.Region == "" || matchText(ac.Region) == matchText(bc.Region)) && (ac.EndDate == "" || bc.EndDate == "" || ac.EndDate == bc.EndDate)
+	country := matchCountry(ac.Country)
+	return len(ac.LocalDate) == 10 && ac.LocalDate == bc.LocalDate && ac.Venue != "" && ac.City != "" && country != "" && matchText(ac.Venue) == matchText(bc.Venue) && matchText(ac.City) == matchText(bc.City) && country == matchCountry(bc.Country) && (ac.Region == "" || bc.Region == "" || matchText(ac.Region) == matchText(bc.Region)) && (ac.EndDate == "" || bc.EndDate == "" || ac.EndDate == bc.EndDate)
 }
 
 // Merge only complete, unambiguous cross-provider groups. A same-day matinee
@@ -93,9 +101,10 @@ func deduplicateReports(rows []reportRelease) []reportRelease {
 	add := func(key string, index int) { buckets[key] = append(buckets[key], index) }
 	for i, r := range rows {
 		c := reportConcert(r)
+		country := matchCountry(c.Country)
 		for _, artist := range r.ArtistIDs {
-			if len(c.LocalDate) == 10 && c.Venue != "" && c.City != "" && c.Country != "" {
-				add("place:"+strings.Join([]string{artist, c.LocalDate, matchText(c.Venue), matchText(c.City), matchText(c.Country)}, "\x00"), i)
+			if len(c.LocalDate) == 10 && c.Venue != "" && c.City != "" && country != "" {
+				add("place:"+strings.Join([]string{artist, c.LocalDate, matchText(c.Venue), matchText(c.City), country}, "\x00"), i)
 			}
 			for _, s := range c.Sources {
 				if u := eventURL(s.URL); u != "" {

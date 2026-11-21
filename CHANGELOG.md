@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 — 2026-11-21
+
+- Make the Agenda and Calendar switch span the report and put the result count
+  beside the date window. Move calendar export below the month grid.
+- Filter both views by countries present in the report. Accept compatible
+  country values from Skiddle and match Canadian listings across providers
+  that use either the country name or code.
+- Link show titles to the first available listing in Ticketmaster, SeatGeek,
+  MusicBrainz, Skiddle order. Keep each contributing provider link under the
+  show details.
+- Link each matched artist to its active official homepage when MusicBrainz
+  supplies an HTTPS address.
+
 ## 0.5.0 — 2026-11-21
 
 - Replace the inherited release dashboard with an offline concert agenda,

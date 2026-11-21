@@ -43,7 +43,7 @@ func (s *State) Step(fetch Fetch, c Config, now time.Time) bool {
 			name := strings.ReplaceAll(strings.ReplaceAll(e.Artist.Name, `\`, `\\`), `"`, `\"`)
 			endpoint = mbBase + "artist/?" + url.Values{"query": {`artist:"` + name + `"`}, "fmt": {"json"}, "limit": {"5"}}.Encode()
 		} else {
-			endpoint = mbBase + "artist/" + e.ResolvedMBID + "?" + url.Values{"fmt": {"json"}, "inc": {"event-rels"}}.Encode()
+			endpoint = mbBase + "artist/" + e.ResolvedMBID + "?" + url.Values{"fmt": {"json"}, "inc": {"event-rels+url-rels"}}.Encode()
 		}
 		resp, err := fetch(endpoint)
 		if err != nil {

@@ -14,7 +14,12 @@ func (e *Entry) concerts(data []byte, now time.Time) error {
 		ID        string `json:"id"`
 		Relations []struct {
 			Target string `json:"target-type"`
-			Event  struct {
+			Type   string `json:"type"`
+			Ended  bool   `json:"ended"`
+			URL    struct {
+				Resource string `json:"resource"`
+			} `json:"url"`
+			Event struct {
 				ID        string `json:"id"`
 				Name      string `json:"name"`
 				Type      string `json:"type"`
@@ -27,6 +32,10 @@ func (e *Entry) concerts(data []byte, now time.Time) error {
 					Place struct {
 						Name    string `json:"name"`
 						Address string `json:"address"`
+						Area    struct {
+							CountryCodes []string `json:"iso-3166-1-codes"`
+							RegionCodes  []string `json:"iso-3166-2-codes"`
+						} `json:"area"`
 					} `json:"place"`
 				} `json:"relations"`
 			} `json:"event"`
@@ -40,7 +49,11 @@ func (e *Entry) concerts(data []byte, now time.Time) error {
 	}
 	out := []Release{}
 	seen := map[string]bool{}
+	website := ""
 	for _, rel := range result.Relations {
+		if rel.Target == "url" && rel.Type == "official homepage" && !rel.Ended && website == "" {
+			website = safeWebURL(rel.URL.Resource)
+		}
 		if rel.Target != "event" {
 			continue
 		}
@@ -53,18 +66,31 @@ func (e *Entry) concerts(data []byte, now time.Time) error {
 		}
 		seen[event.ID] = true
 		places := []string{}
+		var countries []string
 		for _, relation := range event.Relations {
 			if relation.Place.Name != "" {
 				places = append(places, strings.TrimSpace(relation.Place.Name+" "+relation.Place.Address))
+				for _, code := range relation.Place.Area.CountryCodes {
+					countries = append(countries, countryCode(code))
+				}
+				for _, region := range relation.Place.Area.RegionCodes {
+					if code, _, ok := strings.Cut(region, "-"); ok {
+						countries = append(countries, countryCode(code))
+					}
+				}
 			}
 		}
 		show := Release{ID: event.ID, Title: event.Name, Date: event.Life.Begin, EndDate: event.Life.End, Type: "Concert", Venue: strings.Join(places, " · ")}
+		if countries := sortedUnique(countries); len(countries) == 1 {
+			show.Country = countries[0]
+		}
 		if last := show.lastDay(); last == show.Date || last == "" {
 			show.EndDate = ""
 		}
 		out = append(out, show)
 	}
 	e.Releases = out
+	e.ArtistWebsite = website
 	e.Pending = nil
 	e.Offset = 0
 	e.Phase = "done"

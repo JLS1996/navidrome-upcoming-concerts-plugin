@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const Version = "0.5.0"
+const Version = "0.6.0"
 
 func MusicBrainzUserAgent() string {
 	return "navidrome-upcoming-concerts-plugin/" + Version + " (https://github.com/JLS1996/navidrome-upcoming-concerts-plugin)"
@@ -30,6 +30,7 @@ type Artist struct {
 type Release struct {
 	Concert   *Concert `json:"concert,omitempty"`
 	Venue     string   `json:"venue,omitempty"`
+	Country   string   `json:"country,omitempty"`
 	Cancelled bool     `json:"cancelled,omitempty"`
 	ID        string   `json:"id"`
 	Title     string   `json:"title"`
@@ -39,16 +40,17 @@ type Release struct {
 	Secondary []string `json:"secondary-types"`
 }
 type Entry struct {
-	Artist       Artist    `json:"artist"`
-	ResolvedMBID string    `json:"resolvedMbid,omitempty"`
-	Phase        string    `json:"phase"`
-	Offset       int       `json:"offset"`
-	Pending      []Release `json:"pending,omitempty"`
-	Releases     []Release `json:"releases,omitempty"`
-	CheckedAt    string    `json:"checkedAt,omitempty"`
-	Problem      string    `json:"problem,omitempty"`
-	RetryAt      int64     `json:"retryAt,omitempty"`
-	Failures     int       `json:"failures,omitempty"`
+	Artist        Artist    `json:"artist"`
+	ResolvedMBID  string    `json:"resolvedMbid,omitempty"`
+	ArtistWebsite string    `json:"artistWebsite,omitempty"`
+	Phase         string    `json:"phase"`
+	Offset        int       `json:"offset"`
+	Pending       []Release `json:"pending,omitempty"`
+	Releases      []Release `json:"releases,omitempty"`
+	CheckedAt     string    `json:"checkedAt,omitempty"`
+	Problem       string    `json:"problem,omitempty"`
+	RetryAt       int64     `json:"retryAt,omitempty"`
+	Failures      int       `json:"failures,omitempty"`
 }
 type State struct {
 	LookupConfig           string             `json:"lookupConfig,omitempty"`

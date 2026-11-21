@@ -50,7 +50,7 @@ button, .button, summary { cursor: pointer; }
 .button { display: inline-block; text-decoration: none; }
 button:hover, .button:hover, .export > summary:hover { border-color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.masthead, .page-heading, .viewbar, .calendar-head {
+.masthead, .calendar-head {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
 }
 .masthead { padding: 1.15rem 0; border-bottom: 1px solid var(--line); }
@@ -60,19 +60,17 @@ button:hover, .button:hover, .export > summary:hover { border-color: var(--accen
   border-radius: .45rem; background: var(--accent); color: var(--accent-ink); font-size: 1.15rem;
 }
 .updated { color: var(--muted); font-size: .8rem; text-align: right; }
-.page-heading { padding: clamp(1.5rem, 4.5vw, 3.25rem) 0 1.4rem; flex-wrap: wrap; }
+.page-heading { padding: clamp(1.5rem, 4.5vw, 3.25rem) 0 1.4rem; }
 h1 { font-size: clamp(2.25rem, 6.3vw, 4.35rem); font-weight: 750; letter-spacing: -.06em; }
-.page-heading p { margin-top: .55rem; }
-.export { position: relative; margin-left: auto; }
+.page-heading p { display: flex; flex-wrap: wrap; gap: .1rem .45rem; margin-top: .55rem; }
+.export { margin-top: .65rem; }
 .export > summary {
   border: 1px solid var(--line); border-radius: .5rem; padding: .65rem .85rem;
   background: var(--panel); font-size: .9rem; font-weight: 650;
 }
 .export-panel {
-  position: absolute; top: calc(100% + .5rem); right: 0; z-index: 1;
-  width: min(23rem, calc(100vw - 2rem)); padding: 1rem;
+  margin-top: .35rem; padding: .85rem;
   border: 1px solid var(--line); border-radius: .65rem; background: var(--panel);
-  box-shadow: 0 .7rem 2rem #0004;
 }
 .export-panel p, .export-panel label { margin: 0 0 .7rem; font-size: .85rem; }
 .export-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .55rem; }
@@ -81,17 +79,16 @@ h1 { font-size: clamp(2.25rem, 6.3vw, 4.35rem); font-weight: 750; letter-spacing
 #calendar-fallback summary { margin-bottom: .35rem; color: var(--accent); }
 textarea { display: block; width: 100%; margin-top: .35rem; font: .8rem/1.5 monospace; resize: vertical; }
 .notice { padding: .8rem 1rem; margin-bottom: 1rem; border-left: 3px solid var(--accent); background: var(--tone); }
-.toolbar { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.1fr) minmax(0, 1fr); gap: .7rem; }
+.toolbar { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: .7rem; }
 .toolbar label { min-width: 0; color: var(--muted); font-size: .78rem; font-weight: 650; }
 .toolbar input, .toolbar select { display: block; width: 100%; min-width: 0; margin-top: .25rem; font-size: .95rem; }
 .toolbar input::placeholder { color: var(--muted); opacity: 1; }
-.viewbar { justify-content: space-between; flex-wrap: wrap; padding: 1rem 0; border-bottom: 1px solid var(--line); }
-.view-switch, .result-tools, .month-controls { display: flex; align-items: center; gap: .35rem; }
+.viewbar { display: grid; gap: .55rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.view-switch, .month-controls { display: flex; align-items: center; gap: .35rem; }
 .view-switch { padding: .2rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--bg); }
-.view-switch button { background: transparent; border-color: transparent; font-size: .9rem; font-weight: 650; }
+.view-switch button { flex: 1 1 0; background: transparent; border-color: transparent; font-size: .9rem; font-weight: 650; }
 .view-switch button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
-.result-tools { flex-wrap: wrap; color: var(--muted); font-size: .86rem; }
-#reset-filters { padding: .35rem .55rem; font-size: inherit; }
+#reset-filters { justify-self: end; padding: .35rem .55rem; font-size: .86rem; }
 .agenda-group { margin-top: 1.3rem; }
 .agenda-group > h2 { margin-bottom: .65rem; font-size: 1.12rem; }
 .list { display: grid; gap: .5rem; }
@@ -105,20 +102,18 @@ textarea { display: block; width: 100%; margin-top: .35rem; font: .8rem/1.5 mono
   font-size: .76rem; font-weight: 650; overflow-wrap: anywhere;
 }
 .date-day { font-size: 1.7rem; line-height: 1.16; font-weight: 750; }
-.concert-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 16rem); align-items: center; gap: .6rem; overflow-wrap: anywhere; }
+.concert-body { overflow-wrap: anywhere; }
 .concert-body h3 { font-size: 1.18rem; letter-spacing: -.015em; }
-.concert-body h3 a { text-decoration-color: var(--line); }
 .concert-body h3 a:hover { text-decoration-color: var(--accent); }
 .artist-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .55rem; margin-bottom: .25rem; }
-.artist { color: var(--accent); font-weight: 650; font-size: .84rem; }
+.artist, .artist a { color: var(--accent); font-weight: 650; font-size: .84rem; }
+.artist a:hover { color: var(--ink); }
 .event-status { border-radius: .24rem; padding: .1rem .35rem; color: var(--accent); background: var(--tone); font-size: .73rem; font-weight: 650; }
 .event-status[data-alert="true"] { background: var(--warning-bg); color: var(--warning); }
 .venue { margin-top: .28rem; font-size: .91rem; }
 .concert-details { margin-top: .28rem; font-size: .82rem; color: var(--muted); }
 .concert-sources { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .8rem; margin-top: .42rem; font-size: .81rem; }
 .concert-sources a { display: inline-flex; align-items: center; gap: .3rem; }
-.listing { text-align: right; }
-.listing .concert-sources { justify-content: flex-end; }
 .checked-at { margin-top: .2rem; font-size: .75rem; }
 .skiddle-logo {
   display: inline-block; width: 6rem; height: 1.75rem; border-radius: .2rem;
@@ -144,9 +139,6 @@ textarea { display: block; width: 100%; margin-top: .35rem; font: .8rem/1.5 mono
 .day-details > p { margin-top: .55rem; font-size: .88rem; }
 .day-concert { padding: .8rem 0; border-bottom: 1px solid var(--line); }
 .day-concert:last-child { border-bottom: 0; padding-bottom: 0; }
-.day-concert .concert-body, .uncertain-item .concert-body { display: block; }
-.day-concert .listing, .uncertain-item .listing { text-align: left; }
-.day-concert .concert-sources, .uncertain-item .concert-sources { justify-content: flex-start; }
 .empty { padding: .85rem 0; color: var(--muted); }
 footer { margin-top: 1.8rem; padding-top: .95rem; border-top: 1px solid var(--line); font-size: .82rem; }
 footer > p { margin-top: .8rem; }
@@ -156,13 +148,12 @@ footer > p { margin-top: .8rem; }
 .lookup code { color: var(--accent); overflow-wrap: anywhere; }
 @media (max-width: 720px) {
   .calendar-layout { grid-template-columns: 1fr; }
-  .concert-body { display: block; }
-  .listing { text-align: left; }
-  .listing .concert-sources { justify-content: flex-start; }
+  .toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .search-field { grid-column: 1 / -1; }
 }
 @media (max-width: 560px) {
   .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .search-field { grid-column: 1 / -1; }
+  .country-field { grid-column: 1 / -1; }
   .concert { grid-template-columns: 4rem minmax(0, 1fr); gap: .6rem; padding: .68rem; }
   .concert-body h3 { font-size: 1.05rem; }
 }

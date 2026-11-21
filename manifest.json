@@ -1,7 +1,7 @@
 {
   "name": "navidrome-upcoming-concerts-plugin",
   "author": "navidrome-upcoming-concerts-plugin contributors",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Find concerts for artists in your library, browse an offline agenda or month calendar, and export to your calendar.",
   "permissions": {
     "storage": {

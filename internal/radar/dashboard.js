@@ -40,6 +40,7 @@ if (!byID('calendar-export').hidden) {
 const search = byID('search');
 const period = byID('period');
 const source = byID('source');
+const country = byID('country');
 const clear = byID('reset-filters');
 const agenda = byID('agenda');
 const calendar = byID('calendar');
@@ -60,9 +61,9 @@ function normalize(text) {
 const groups = Array.from(agenda.querySelectorAll('.agenda-group'), group => ({
   group,
   shows: Array.from(group.querySelectorAll('.concert'), node => {
-    const { date, endDate, timing, status, sources } = node.dataset;
+    const { date, endDate, timing, status, sources, country } = node.dataset;
     return {
-      node, date, endDate: endDate || date, timing, status, sources: sources.split('|'),
+      node, date, endDate: endDate || date, timing, status, country, sources: sources.split('|'),
       searchText: normalize(Array.from(node.querySelectorAll('.artist, h3, .venue'), part => part.textContent).join(' '))
     };
   })
@@ -78,7 +79,7 @@ const dateKey = date => date.toISOString().slice(0, 10);
 const dayKey = (month, day) => month + '-' + String(day).padStart(2, '0');
 
 function filtered() {
-  return !!(search.value.trim() || period.value || source.value);
+  return !!(search.value.trim() || period.value || source.value || country.value);
 }
 
 function monthBounds(month) {
@@ -204,6 +205,7 @@ function filter() {
         (show.timing === 'Today' || show.timing === 'Ongoing');
       const match = (!criterion || show[criterion] === value || timingMatch) &&
         (!source.value || show.sources.includes(source.value)) &&
+        (!country.value || show.country === country.value) &&
         terms.every(term => show.searchText.includes(term));
       show.node.hidden = !match;
       return match;
@@ -252,8 +254,9 @@ grid.addEventListener('keydown', event => {
 search.addEventListener('input', filter);
 period.addEventListener('change', filter);
 source.addEventListener('change', filter);
+country.addEventListener('change', filter);
 clear.addEventListener('click', () => {
-  search.value = period.value = source.value = '';
+  search.value = period.value = source.value = country.value = '';
   filter();
   search.focus();
 });
@@ -266,4 +269,12 @@ byID('current-month').addEventListener('click', () => {
   selectedDate = '';
   renderCalendar();
 });
+if (typeof Intl.DisplayNames === 'function') {
+  const regions = new Intl.DisplayNames(['en'], { type: 'region' });
+  const options = Array.from(country.options).slice(1);
+  for (const option of options) option.textContent = regions.of(option.value);
+  options.sort((a, b) => a.textContent.localeCompare(b.textContent, 'en'));
+  country.append(...options);
+}
+byID('calendar-month').append(byID('calendar-export'));
 byID('dashboard-controls').hidden = false;
