@@ -22,9 +22,10 @@ servers require their hostname in the package's HTTP permission grants.
 Only events managed by this plugin are updated/deleted, with ownership and
 precondition checks. Incomplete or failing provider refreshes prevent destructive
 calendar reconciliation. Keep `integrations.json` to preserve acknowledgements.
-Google currently represents concerts as single-day entries with any range/status
-in the description. CalDAV uses the ICS representation. Live accounts remain
-unverified in this fork; local protocol fixtures cover CRUD and conflict recovery.
+Google and CalDAV preserve multi-day ranges and cancellation status. Google
+exports created by older versions are updated once using the existing event IDs;
+notification acknowledgements are preserved. Live accounts remain unverified in
+this fork; local protocol fixtures cover CRUD and conflict recovery.
 
 ## ntfy
 

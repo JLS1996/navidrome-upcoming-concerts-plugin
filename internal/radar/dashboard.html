@@ -22,7 +22,7 @@ textarea{display:block;width:100%;resize:vertical;color:var(--ink);background:va
 <section class="list" aria-label="Concerts">@@ROWS@@</section>
 <p id="empty" class="empty" @@EMPTYHIDDEN@@>No concerts to display. Checks may still be running, or no known concerts fall within your filters. This does not mean an artist has no upcoming concerts.</p>
 @@ISSUES@@
-<footer>@@CALENDAR_STATS@@. Download exports the whole report, independent of browser filters.<br>Page generated @@GENERATED@@ · Refresh this file to load plugin updates.<br>Dates come from MusicBrainz and may change or be incomplete. Name matches can be wrong; use artist ID overrides when needed. This page works offline; source links require internet.</footer>
+<footer>@@CALENDAR_STATS@@. Download exports the whole report, independent of browser filters.<br>Page generated @@GENERATED@@ · Refresh this file to load plugin updates.<br>Dates come from concert providers and may change or be incomplete. Name matches can be wrong; use artist ID overrides when needed. This page works offline; source links require internet.</footer>
 </main><script>
 // Blob downloads avoid data-URL download restrictions in mobile browsers.
 // Keep a plain-text fallback available even when this file is only previewed.
@@ -60,7 +60,17 @@ function renderCalendar(){
  const grid=document.getElementById('month-grid');grid.replaceChildren();
  document.getElementById('month-label').textContent=new Intl.DateTimeFormat('en',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(year,month,1)));
  const visible=rows.filter(r=>!r.hidden),byDate=new Map();
- for(const row of visible){if(row.dataset.date.length===10){if(!byDate.has(row.dataset.date))byDate.set(row.dataset.date,[]);byDate.get(row.dataset.date).push(row)}}
+ const monthStart=monthKey()+'-01',monthEnd=monthKey()+'-'+String(new Date(Date.UTC(year,month+1,0)).getUTCDate()).padStart(2,'0');
+ for(const row of visible){
+  const start=row.dataset.date,end=row.dataset.endDate||start;
+  if(start.length!==10)continue;
+  // Clip ranges to this month, bounding work even for long-running events.
+  const last=end.length===10&&end>=start?end:start;
+  for(let day=start>monthStart?start:monthStart;day<=last&&day<=monthEnd;){
+   if(!byDate.has(day))byDate.set(day,[]);byDate.get(day).push(row);
+   const next=new Date(day+'T00:00:00Z');next.setUTCDate(next.getUTCDate()+1);day=next.toISOString().slice(0,10);
+  }
+ }
  const dates=[...byDate.keys()].filter(date=>date.startsWith(monthKey()+'-')).sort();
  if(!selectedDate.startsWith(monthKey()+'-'))selectedDate=dates.find(date=>date>=snapshotDate)||dates[0]||(snapshotDate.startsWith(monthKey()+'-')?snapshotDate:monthKey()+'-01');
  for(const name of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']){const el=document.createElement('div');el.className='weekday';el.textContent=name;grid.append(el)}
@@ -99,7 +109,7 @@ function renderCalendar(){
   detail.append(item)
  }
  const uncertain=document.getElementById('uncertain-list');uncertain.replaceChildren();
- for(const row of visible.filter(r=>r.dataset.date.length<10&&(r.dataset.date===String(year)||r.dataset.date===monthKey()))){const item=document.createElement('div');item.className='uncertain-item';item.textContent=row.querySelector('.artist').textContent+' — '+row.querySelector('h2').textContent+' · '+row.querySelector('.date').firstChild.textContent;uncertain.append(item)}
+ for(const row of visible.filter(r=>r.dataset.date.length<10&&(!r.dataset.date||r.dataset.date===String(year)||r.dataset.date===monthKey()))){const item=document.createElement('div');item.className='uncertain-item';item.textContent=row.querySelector('.artist').textContent+' — '+row.querySelector('h2').textContent+' · '+row.querySelector('.date').firstChild.textContent;uncertain.append(item)}
  document.getElementById('uncertain-dates').hidden=uncertain.children.length===0;
 }
 function moveMonth(delta){const d=new Date(Date.UTC(year,month+delta,1));year=d.getUTCFullYear();month=d.getUTCMonth();selectedDate='';renderCalendar()}

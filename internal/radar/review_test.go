@@ -112,7 +112,7 @@ func TestCalendarUpdateRecoversWhenRemoteEventWasDeleted(t *testing.T) {
 			} else {
 				d.googleOp(uid, desired, true, d.Remote[uid], ic, confirm, testNow)
 			}
-			if !d.Remote[uid].Present || d.Remote[uid].Hash != desired.Fingerprint() {
+			if !d.Remote[uid].Present || d.Remote[uid].Hash != calendarFingerprint(desired, provider) {
 				t.Fatal("recreated event not acknowledged")
 			}
 		})

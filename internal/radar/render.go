@@ -13,7 +13,7 @@ import (
 //go:embed dashboard.html
 var dashboard string
 
-type row struct{ Artist, Title, Type, TypeLabel, Secondary, Date, DateLabel, URL, Status, CheckedAt, Cover string }
+type row struct{ Artist, Title, Type, TypeLabel, Secondary, Date, DateLabel, URL, Status, CheckedAt, Cover, Details, Sources, EndDate string }
 type issue struct{ Name, ID, Message string }
 type report struct {
 	Generated                  string
@@ -41,11 +41,11 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 			p.Issues = append(p.Issues, issue{e.Artist.Name, e.Artist.ID, e.Problem})
 		}
 	}
-	detailByID := map[string]string{}
-	linksByID := map[string]string{}
 	for _, r := range visibleReleases(s, c, now) {
-		detailByID[r.SourceURL()] = concertDetails(r.Release)
-		linksByID[r.SourceURL()] = concertSourcesHTML(r.Release)
+		endDate := ""
+		if r.Concert != nil {
+			endDate = r.Concert.EndDate
+		}
 		status := "Upcoming"
 		_, end, _ := DateInterval(r.Date)
 		if r.Concert != nil {
@@ -69,7 +69,7 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 		} else if r.Concert != nil && r.Concert.Status == "rescheduled" {
 			status = "Rescheduled"
 		}
-		p.Rows = append(p.Rows, row{Artist: r.ArtistName, Title: r.Title + venueSuffix(r.Venue), Type: r.PrimaryType(), TypeLabel: r.TypeLabel(), Secondary: strings.Join(r.Secondary, "|"), Date: r.Date, DateLabel: DateLabel(r.Date), URL: r.SourceURL(), Status: status, CheckedAt: r.CheckedAt})
+		p.Rows = append(p.Rows, row{Details: concertDetails(r.Release), Sources: concertSourcesHTML(r.Release), EndDate: endDate, Artist: r.ArtistName, Title: r.Title + venueSuffix(r.Venue), Type: r.PrimaryType(), TypeLabel: r.TypeLabel(), Secondary: strings.Join(r.Secondary, "|"), Date: r.Date, DateLabel: DateLabel(r.Date), URL: r.SourceURL(), Status: status, CheckedAt: r.CheckedAt})
 	}
 	sort.SliceStable(p.Rows, func(i, j int) bool {
 		a, b := p.Rows[i], p.Rows[j]
@@ -87,7 +87,7 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 		if t, err := time.Parse(time.RFC3339, checked); err == nil {
 			checked = t.UTC().Format("2 Jan 2006, 15:04 UTC")
 		}
-		fmt.Fprintf(&rows, `<article class="%s"%s data-type="%s" data-secondary="%s" data-period="%s" data-date="%s"><div class="concert-date date">%s<br><span class="meta">%s</span></div><div class="concert-body"><div class="artist"><a href="%s" rel="noreferrer">%s</a></div><h2><a href="%s" rel="noreferrer">%s</a></h2><div class="meta">Last checked:<br><time>%s</time></div></div><span class="tag">%s</span>%s<div class="meta">%s%s</div></article>`, class, style, esc(r.Type), esc(r.Secondary), esc(r.Status), esc(r.Date), esc(r.DateLabel), esc(r.Status), esc(r.URL), esc(r.Artist), esc(r.URL), esc(r.Title), esc(checked), esc(r.TypeLabel), cover, esc(detailByID[r.URL]), linksByID[r.URL])
+		fmt.Fprintf(&rows, `<article class="%s"%s data-type="%s" data-secondary="%s" data-period="%s" data-date="%s" data-end-date="%s"><div class="concert-date date">%s<br><span class="meta">%s</span></div><div class="concert-body"><div class="artist"><a href="%s" rel="noreferrer">%s</a></div><h2><a href="%s" rel="noreferrer">%s</a></h2><div class="meta">Last checked:<br><time>%s</time></div></div><span class="tag">%s</span>%s<div class="meta">%s%s</div></article>`, class, style, esc(r.Type), esc(r.Secondary), esc(r.Status), esc(r.Date), esc(r.EndDate), esc(r.DateLabel), esc(r.Status), esc(r.URL), esc(r.Artist), esc(r.URL), esc(r.Title), esc(checked), esc(r.TypeLabel), cover, esc(r.Details), r.Sources)
 	}
 	if len(p.Issues) > 0 {
 		summary := fmt.Sprintf("%d artists need attention", len(p.Issues))
