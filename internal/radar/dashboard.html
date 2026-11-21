@@ -56,6 +56,14 @@ let selectedDate='';
 let activeView='list',year=Number(snapshotDate.slice(0,4)),month=Number(snapshotDate.slice(5,7))-1;
 function switchView(view){activeView=view;list.hidden=view!=='list';calendar.hidden=view!=='calendar';listButton.setAttribute('aria-pressed',String(view==='list'));calendarButton.setAttribute('aria-pressed',String(view==='calendar'));filter()}
 function monthKey(){return String(year).padStart(4,'0')+'-'+String(month+1).padStart(2,'0')}
+function eventLabel(row,text,className){
+ const href=row.querySelector('h2 a')?.getAttribute('href');
+ const label=document.createElement(href?'a':'span');
+ label.className=className;
+ if(href){label.href=href;label.rel='noopener noreferrer'}
+ label.textContent=text;
+ return label
+}
 function renderCalendar(){
  const grid=document.getElementById('month-grid');grid.replaceChildren();
  document.getElementById('month-label').textContent=new Intl.DateTimeFormat('en',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(year,month,1)));
@@ -92,7 +100,7 @@ function renderCalendar(){
   if(concerts.length){const count=document.createElement('span');count.className='day-count';count.textContent=String(concerts.length);count.setAttribute('aria-hidden','true');button.append(count)}
   el.append(button);el.setAttribute('aria-label',date);
   for(const row of concerts){
-   const link=document.createElement('a');link.className='calendar-event';link.href=row.querySelector('h2 a').href;link.rel='noopener noreferrer';link.textContent=row.querySelector('.artist').textContent+' — '+row.querySelector('h2').textContent;el.append(link)
+   el.append(eventLabel(row,row.querySelector('.artist').textContent+' — '+row.querySelector('h2').textContent,'calendar-event'))
   }
   grid.append(el)
  }
@@ -102,10 +110,12 @@ function renderCalendar(){
  const selected=byDate.get(selectedDate)||[];document.getElementById('day-empty').hidden=selected.length>0;
  for(const row of selected){
   const item=document.createElement('article');item.className='day-concert';
-  const link=document.createElement('a');link.href=row.querySelector('h2 a').href;link.rel='noopener noreferrer';link.textContent=row.querySelector('h2').textContent;
   const body=document.createElement('div');body.className='day-concert-body';
-  const artist=document.createElement('p'),artistLink=document.createElement('a');artistLink.className='day-artist';artistLink.href=link.href;artistLink.rel='noreferrer';artistLink.textContent=row.querySelector('.artist').textContent;
-  artist.append(artistLink,document.createTextNode(' · '+row.querySelector('.tag').textContent));body.append(link,artist);item.append(body);
+  const title=eventLabel(row,row.querySelector('h2').textContent,'day-concert-title');
+  const artist=document.createElement('p');artist.className='day-artist';
+  artist.textContent=row.querySelector('.artist').textContent+' · '+row.querySelector('.date .meta').textContent;
+  body.append(title,artist,row.querySelector('.concert-details').cloneNode(true));
+  item.append(body);
   detail.append(item)
  }
  const uncertain=document.getElementById('uncertain-list');uncertain.replaceChildren();

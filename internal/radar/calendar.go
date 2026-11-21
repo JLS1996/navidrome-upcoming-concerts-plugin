@@ -58,8 +58,12 @@ func (r Release) SourceURL() string {
 	return ""
 }
 func Events(s State, c Config, namespace string, now time.Time, exactOnly bool) []CalendarEvent {
+	return calendarEvents(visibleReleases(s, c, now), namespace, exactOnly)
+}
+
+func calendarEvents(visible []reportRelease, namespace string, exactOnly bool) []CalendarEvent {
 	result := []CalendarEvent{}
-	for _, r := range visibleReleases(s, c, now) {
+	for _, r := range visible {
 		if exactOnly && len(r.Date) != 10 {
 			continue
 		}
@@ -79,7 +83,10 @@ func Events(s State, c Config, namespace string, now time.Time, exactOnly bool) 
 				description += ". Through " + DateLabel(r.Concert.EndDate)
 			}
 			for _, source := range r.Concert.Sources {
-				description += ". Source: " + source.Provider + " " + source.URL
+				description += ". Source: " + source.Provider
+				if sourceURL := safeWebURL(source.URL); sourceURL != "" {
+					description += " " + sourceURL
+				}
 				if source.Provider == "Skiddle" {
 					description += ". Skiddle logo: " + SkiddleLogoURL
 				}
@@ -134,10 +141,14 @@ func EventICS(e CalendarEvent, now time.Time) string {
 		return ""
 	}
 	end := e.exclusiveEnd(t)
-	lines := []string{"BEGIN:VEVENT", "UID:" + icsEscape(e.UID), "DTSTAMP:" + now.UTC().Format("20060102T150405Z"), "DTSTART;VALUE=DATE:" + t.Format("20060102"), "DTEND;VALUE=DATE:" + end.Format("20060102"), "SUMMARY:" + icsEscape(e.Summary), "DESCRIPTION:" + icsEscape(e.Description), "URL:" + icsEscape(e.URL), "TRANSP:TRANSPARENT", "END:VEVENT"}
-	if e.Status == "CANCELLED" {
-		lines = append(lines[:len(lines)-1], "STATUS:CANCELLED", "END:VEVENT")
+	lines := []string{"BEGIN:VEVENT", "UID:" + icsEscape(e.UID), "DTSTAMP:" + now.UTC().Format("20060102T150405Z"), "DTSTART;VALUE=DATE:" + t.Format("20060102"), "DTEND;VALUE=DATE:" + end.Format("20060102"), "SUMMARY:" + icsEscape(e.Summary), "DESCRIPTION:" + icsEscape(e.Description), "TRANSP:TRANSPARENT"}
+	if u := safeWebURL(e.URL); u != "" {
+		lines = append(lines, "URL:"+u)
 	}
+	if e.Status == "CANCELLED" {
+		lines = append(lines, "STATUS:CANCELLED")
+	}
+	lines = append(lines, "END:VEVENT")
 	var b strings.Builder
 	for _, l := range lines {
 		b.WriteString(foldICS(l))
@@ -196,8 +207,11 @@ func FullCycle(s State, c Config) bool {
 	return true
 }
 func CalendarStats(s State, c Config, namespace string, now time.Time) string {
-	all := len(Events(s, c, namespace, now, false))
-	exact := len(Events(s, c, namespace, now, true))
+	visible := visibleReleases(s, c, now)
+	return calendarStats(len(visible), len(calendarEvents(visible, namespace, true)))
+}
+
+func calendarStats(all, exact int) string {
 	eventWord, releaseWord := "events", "concerts"
 	if exact == 1 {
 		eventWord = "event"

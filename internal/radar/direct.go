@@ -9,6 +9,7 @@ import (
 // CreditInventory stores only whole credit names and IDs, never song titles or
 // paths. A new snapshot replaces the old one only after both scoped scans finish.
 type CreditInventory struct {
+	Refresh bool            `json:"refresh,omitempty"`
 	Ready   bool            `json:"ready,omitempty"`
 	At      int64           `json:"at,omitempty"`
 	RetryAt int64           `json:"retryAt,omitempty"`
@@ -31,6 +32,9 @@ func creditKey(name, id string) string { return normalize(name) + "\x00" + id }
 // IncludedArtist requires a whole-name match even when Navidrome's legacy
 // artistId points to a participant in a combined album or track credit.
 func IncludedArtist(a Artist, c Config) bool {
+	if c.Exclusions[a.ID] {
+		return false
+	}
 	if !c.ExcludeUncredited {
 		return true
 	}
@@ -128,6 +132,7 @@ func (s *CreditInventory) Page(raw string, now time.Time) (bool, error) {
 	s.Phase = ""
 	s.Offset = 0
 	s.Ready = true
+	s.Refresh = false
 	s.At = now.Unix()
 	s.RetryAt = 0
 	return true, nil

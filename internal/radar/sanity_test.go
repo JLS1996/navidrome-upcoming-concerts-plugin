@@ -82,3 +82,53 @@ func TestReportDetailsStayWithConcert(t *testing.T) {
 		}
 	}
 }
+
+func TestManualRefreshAndDisabledMusicBrainzMatching(t *testing.T) {
+	c := cfg()
+	artists := []Artist{{ID: "unknown", Name: "Unknown"}, {ID: "known", Name: "Known", MBID: artistID}}
+	var s State
+	s.Reconcile(artists, c, "scope", testNow)
+	for i := range s.Entries {
+		s.Entries[i].Failures = 3
+		s.Entries[i].RetryAt = testNow.Add(time.Hour).Unix()
+	}
+	s.NextHTTP = testNow.Add(time.Minute).Unix()
+	c.AutoMatch = false
+	s.ApplyRefresh(false)
+	s.ApplyRefresh(true)
+	s.Reconcile(artists, c, "scope", testNow)
+	if s.Entries[0].Phase != "unresolved" || s.Entries[1].Failures != 0 || s.Entries[1].RetryAt != 0 {
+		t.Fatal("refresh did not apply the matching setting and reset artist retries")
+	}
+	if s.Step(func(string) (Response, error) {
+		t.Fatal("manual refresh bypassed the upstream pause")
+		return Response{}, nil
+	}, c, testNow) {
+		t.Fatal("lookup ran during cooldown")
+	}
+}
+
+func TestArtistDiscoveryRequiresAListOnSuccess(t *testing.T) {
+	if _, err := AccessibleLibraries(`{"subsonic-response":{"status":"ok"}}`, []int{1}); err == nil {
+		t.Fatal("missing folder list was mistaken for revoked access")
+	}
+	if _, err := ParseArtists(`{"subsonic-response":{"status":"ok"}}`); err == nil {
+		t.Fatal("missing artist list was mistaken for an empty library")
+	}
+	artists, err := ParseArtists(`{"subsonic-response":{"status":"ok","artists":{}}}`)
+	if err != nil || len(artists) != 0 {
+		t.Fatal("empty artist list was rejected")
+	}
+}
+
+func TestCalendarExportWithoutListingURL(t *testing.T) {
+	e := CalendarEvent{UID: "test", Date: "2026-12-06", EndDate: "2026-12", Summary: "Show"}
+	ics := EventICS(e, testNow)
+	if strings.Contains(ics, "\r\nURL:") || !strings.Contains(ics, "DTEND;VALUE=DATE:20261207") {
+		t.Fatal("export contained an empty URI or inferred an exact end from a partial date")
+	}
+	e.URL = "https://example.com/venue,show;2"
+	if !strings.Contains(EventICS(e, testNow), "URL:"+e.URL+"\r\n") {
+		t.Fatal("calendar export changed URI delimiters")
+	}
+}

@@ -95,20 +95,32 @@ func atomicWrite(dir, name string, b []byte, mode os.FileMode) error {
 	return os.Rename(tmp, filepath.Join(dir, name))
 }
 func Save(dir string, s State, c Config, now time.Time) error {
-	html, err := Render(s, c, now)
-	if err != nil {
-		return err
-	}
-	if err = AtomicWrite(dir, "music-concerts.ics", CalendarICS(Events(s, c, c.EventNamespace(), now, true), now)); err != nil {
+	if err := SaveReports(dir, s, c, now); err != nil {
 		return err
 	}
 	s.RenderedAt = now.Unix()
-	b, err := json.Marshal(s)
+	// Publish before committing state, so a failed page write will be retried.
+	return SaveState(dir, s)
+}
+
+func SaveReports(dir string, s State, c Config, now time.Time) error {
+	visible := visibleReleases(s, c, now)
+	events := calendarEvents(visible, c.EventNamespace(), true)
+	ics := CalendarICS(events, now)
+	html, err := render(s, c, now, visible, events, ics)
 	if err != nil {
 		return err
 	}
-	// Publish before committing state, so a failed page write will be retried.
-	if err = AtomicWrite(dir, "upcoming-concerts.html", html); err != nil {
+	if err = AtomicWrite(dir, "music-concerts.ics", ics); err != nil {
+		return err
+	}
+	return AtomicWrite(dir, "upcoming-concerts.html", html)
+}
+
+// SaveState checkpoints work that does not change the published concert snapshot.
+func SaveState(dir string, s State) error {
+	b, err := json.Marshal(s)
+	if err != nil {
 		return err
 	}
 	return AtomicWrite(dir, "state.json", b)

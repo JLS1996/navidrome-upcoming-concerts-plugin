@@ -32,7 +32,7 @@ func (s *State) Step(fetch Fetch, c Config, now time.Time) bool {
 		if !IncludedArtist(e.Artist, c) {
 			continue
 		}
-		if (e.Phase != "match" && e.Phase != "releases") || e.RetryAt > now.Unix() {
+		if (e.Phase != "releases" && (e.Phase != "match" || !c.AutoMatch)) || e.RetryAt > now.Unix() {
 			continue
 		}
 		s.Cursor = (idx + 1) % len(s.Entries)

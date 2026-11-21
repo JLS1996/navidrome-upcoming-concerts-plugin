@@ -137,12 +137,25 @@ try:
  (storage/'seatgeek.json').write_text(json.dumps(cached))
  (storage/'tick.lock').write_text('simulated interrupted callback');start()
  wait_for(lambda:'Restart-updated fixture concert' in (storage/'upcoming-concerts.html').read_text())
+ # Establish a completed credit inventory, then ensure a manual rescan
+ # publishes the authorized provider caches and reaches every provider queue.
+ settings['exclude_uncredited']=True
+ api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'config':json.dumps(settings)})
+ def local_state():return json.loads((storage/'state.json').read_text())
+ wait_for(lambda:local_state().get('directCredits',{}).get('ready') and 'Checking directly credited music:' not in local_state().get('problem',''))
  settings['manual_refresh']=True
  api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'config':json.dumps(settings)})
- wait_for(lambda:'Daily budget reached' in (storage/'upcoming-concerts.html').read_text())
- time.sleep(4)
+ def cached_rescan():
+  doc=(storage/'upcoming-concerts.html').read_text()
+  return 'Checking directly credited music:' in doc and 'Source: SeatGeek' in doc and 'Source: Skiddle' in doc
+ wait_for(cached_rescan)
+ assert (storage/'music-concerts.ics').read_text().count('BEGIN:VEVENT')==2
+ wait_for(lambda:local_state().get('refreshToggle') and not local_state().get('providerRefreshPending') and 'Checking directly credited music:' not in local_state().get('problem',''))
  assert len(requests)==3 and provider()['requestsReserved']==3,'restart or refresh reset quota'
- assert len(provider()['artists'][0]['concerts'])==2,'refresh lost cached concerts'
+ for name in ['ticketmaster','seatgeek','skiddle']:
+  snapshot=json.loads((storage/(name+'.json')).read_text())
+  assert snapshot['artists'][0]['lookup']['nextRefreshAt']==0,'credit scan swallowed manual provider refresh'
+  assert len(snapshot['artists'][0]['concerts'])==2,'refresh lost cached concerts'
  settings['deduplicate_concerts']=False
  api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'config':json.dumps(settings)})
  wait_for(lambda:(storage/'music-concerts.ics').read_text().count('BEGIN:VEVENT')==6)
@@ -150,6 +163,16 @@ try:
  api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'config':json.dumps(settings)})
  wait_for(lambda:(storage/'music-concerts.ics').read_text().count('BEGIN:VEVENT')==2)
  assert len(sk_requests)==2 and len(sg_requests)==3 and len(requests)==3,'deduplication switch re-fetched metadata'
+ # A damaged provider cache is reported without dropping healthy sources.
+ skiddle_file=storage/'skiddle.json'
+ skiddle_cache=skiddle_file.read_bytes()
+ skiddle_file.write_text('{')
+ wait_for(lambda:'skiddle.json is corrupt' in (storage/'upcoming-concerts.html').read_text())
+ assert 'Source: SeatGeek' in (storage/'upcoming-concerts.html').read_text()
+ assert (storage/'music-concerts.ics').read_text().count('BEGIN:VEVENT')==2
+ assert skiddle_file.read_text()=='{','damaged provider cache was overwritten'
+ skiddle_file.write_bytes(skiddle_cache)
+ wait_for(lambda:'Source: Skiddle' in (storage/'upcoming-concerts.html').read_text())
  # Malformed settings must preserve the last valid scan and report.
  before_state=(storage/'state.json').read_bytes();before_html=(storage/'upcoming-concerts.html').read_bytes()
  invalid=dict(settings,seatgeek_artist_overrides='[')

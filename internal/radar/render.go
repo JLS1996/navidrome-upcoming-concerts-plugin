@@ -13,7 +13,7 @@ import (
 //go:embed dashboard.html
 var dashboard string
 
-type row struct{ Artist, Title, Type, TypeLabel, Secondary, Date, DateLabel, URL, Status, CheckedAt, Cover, Details, Sources, EndDate string }
+type row struct{ Artist, Title, Type, TypeLabel, Secondary, Date, DateLabel, URL, Status, CheckedAt, Details, Sources, EndDate string }
 type issue struct{ Name, ID, Message string }
 type report struct {
 	Generated                  string
@@ -25,6 +25,12 @@ type report struct {
 }
 
 func Render(s State, c Config, now time.Time) ([]byte, error) {
+	visible := visibleReleases(s, c, now)
+	events := calendarEvents(visible, c.EventNamespace(), true)
+	return render(s, c, now, visible, events, CalendarICS(events, now))
+}
+
+func render(s State, c Config, now time.Time, visible []reportRelease, events []CalendarEvent, ics []byte) ([]byte, error) {
 	p := report{Generated: now.UTC().Format("2 Jan 2006, 15:04 UTC"), Artists: 0, Problem: s.Problem, AheadDays: c.AheadDays, PastDays: c.PastDays}
 	today := now.UTC().Format("2006-01-02")
 	for _, e := range s.Entries {
@@ -41,18 +47,13 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 			p.Issues = append(p.Issues, issue{e.Artist.Name, e.Artist.ID, e.Problem})
 		}
 	}
-	for _, r := range visibleReleases(s, c, now) {
+	for _, r := range visible {
 		endDate := ""
-		if r.Concert != nil {
-			endDate = r.Concert.EndDate
+		_, end, _ := r.dateRange()
+		if len(r.Date) == 10 {
+			endDate = end.Format("2006-01-02")
 		}
 		status := "Upcoming"
-		_, end, _ := DateInterval(r.Date)
-		if r.Concert != nil {
-			if last, _, valid := DateInterval(r.Concert.EndDate); valid && last.After(end) {
-				end = last
-			}
-		}
 		if len(r.Date) < 10 {
 			status = "Date uncertain"
 		} else if end.Format("2006-01-02") < today {
@@ -82,12 +83,15 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 	esc := html.EscapeString
 	var rows, issues strings.Builder
 	for _, r := range p.Rows {
-		class, style, cover := "concert", "", ""
 		checked := r.CheckedAt
 		if t, err := time.Parse(time.RFC3339, checked); err == nil {
 			checked = t.UTC().Format("2 Jan 2006, 15:04 UTC")
 		}
-		fmt.Fprintf(&rows, `<article class="%s"%s data-type="%s" data-secondary="%s" data-period="%s" data-date="%s" data-end-date="%s"><div class="concert-date date">%s<br><span class="meta">%s</span></div><div class="concert-body"><div class="artist"><a href="%s" rel="noreferrer">%s</a></div><h2><a href="%s" rel="noreferrer">%s</a></h2><div class="meta">Last checked:<br><time>%s</time></div></div><span class="tag">%s</span>%s<div class="meta">%s%s</div></article>`, class, style, esc(r.Type), esc(r.Secondary), esc(r.Status), esc(r.Date), esc(r.EndDate), esc(r.DateLabel), esc(r.Status), esc(r.URL), esc(r.Artist), esc(r.URL), esc(r.Title), esc(checked), esc(r.TypeLabel), cover, esc(r.Details), r.Sources)
+		title := esc(r.Title)
+		if r.URL != "" {
+			title = fmt.Sprintf(`<a href="%s" rel="noreferrer">%s</a>`, esc(r.URL), title)
+		}
+		fmt.Fprintf(&rows, `<article class="concert" data-type="%s" data-secondary="%s" data-period="%s" data-date="%s" data-end-date="%s"><div class="concert-date date">%s<br><span class="meta">%s</span></div><div class="concert-body"><div class="artist">%s</div><h2>%s</h2><div class="meta">Last checked:<br><time>%s</time></div></div><span class="tag">%s</span><div class="meta concert-details">%s%s</div></article>`, esc(r.Type), esc(r.Secondary), esc(r.Status), esc(r.Date), esc(r.EndDate), esc(r.DateLabel), esc(r.Status), esc(r.Artist), title, esc(checked), esc(r.TypeLabel), esc(r.Details), r.Sources)
 	}
 	if len(p.Issues) > 0 {
 		summary := fmt.Sprintf("%d artists need attention", len(p.Issues))
@@ -122,8 +126,6 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 	if len(p.Rows) > 0 {
 		hidden = "hidden"
 	}
-	events := Events(s, c, c.EventNamespace(), now, true)
-	ics := CalendarICS(events, now)
 	emptyNote := ""
 	if len(events) == 0 {
 		emptyNote = `<p class="notice">No dated calendar events yet. Importing this calendar will add nothing. Checks may still be running, or no exact concert dates fall within your filters.</p>`
@@ -152,6 +154,6 @@ func Render(s State, c Config, now time.Time) ([]byte, error) {
 	if theme != "bright" && theme != "black" {
 		theme = "dark"
 	}
-	result := strings.NewReplacer("@@SKIDDLE_LOGO@@", skiddleLogoBase64(), "@@THEME@@", theme, "@@PERIOD_OPTIONS@@", periodOptions.String(), "@@TYPE_OPTIONS@@", typeOptions.String(), "@@CALENDAR_EMPTY_NOTE@@", emptyNote, "@@CALENDAR_TEXT@@", esc(string(ics)), "@@ICS@@", base64.StdEncoding.EncodeToString(ics), "@@CALENDAR_STATS@@", esc(CalendarStats(s, c, c.EventNamespace(), now)), "@@TODAY@@", now.UTC().Format("2006-01-02"), "@@COUNT@@", fmt.Sprint(len(p.Rows)), "@@COMPLETE@@", fmt.Sprint(p.Complete), "@@ARTISTS@@", fmt.Sprint(p.Artists), "@@PENDING@@", fmt.Sprint(p.Pending), "@@PAST@@", fmt.Sprint(p.PastDays), "@@AHEAD@@", fmt.Sprint(p.AheadDays), "@@GENERATED@@", esc(p.Generated), "@@PROBLEM@@", problem+providerStatusHTML(s, c, now), "@@ROWS@@", rows.String(), "@@ISSUES@@", issues.String(), "@@EMPTYHIDDEN@@", hidden).Replace(dashboard)
+	result := strings.NewReplacer("@@SKIDDLE_LOGO@@", skiddleLogoBase64(), "@@THEME@@", theme, "@@PERIOD_OPTIONS@@", periodOptions.String(), "@@TYPE_OPTIONS@@", typeOptions.String(), "@@CALENDAR_EMPTY_NOTE@@", emptyNote, "@@CALENDAR_TEXT@@", esc(string(ics)), "@@ICS@@", base64.StdEncoding.EncodeToString(ics), "@@CALENDAR_STATS@@", esc(calendarStats(len(visible), len(events))), "@@TODAY@@", now.UTC().Format("2006-01-02"), "@@COUNT@@", fmt.Sprint(len(p.Rows)), "@@COMPLETE@@", fmt.Sprint(p.Complete), "@@ARTISTS@@", fmt.Sprint(p.Artists), "@@PENDING@@", fmt.Sprint(p.Pending), "@@PAST@@", fmt.Sprint(p.PastDays), "@@AHEAD@@", fmt.Sprint(p.AheadDays), "@@GENERATED@@", esc(p.Generated), "@@PROBLEM@@", problem+providerStatusHTML(s, c, now), "@@ROWS@@", rows.String(), "@@ISSUES@@", issues.String(), "@@EMPTYHIDDEN@@", hidden).Replace(dashboard)
 	return []byte(result), nil
 }

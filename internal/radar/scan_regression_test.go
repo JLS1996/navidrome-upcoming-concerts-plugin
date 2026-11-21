@@ -125,14 +125,28 @@ func TestPrivateScanReplay(t *testing.T) {
 		t.Skip("set CONCERT_SCAN_DIR for an offline private scan replay")
 	}
 	dir := t.TempDir()
-	for _, pair := range [][2]string{{"3-state.json", "state.json"}, {"5-seatgeek.json", "seatgeek.json"}, {"6-skiddle.json", "skiddle.json"}, {"7-integrations.json", "integrations.json"}} {
-		data, err := os.ReadFile(filepath.Join(input, pair[0]))
+	read := func(name string) ([]byte, error) {
+		data, err := os.ReadFile(filepath.Join(input, name))
+		if !os.IsNotExist(err) {
+			return data, err
+		}
+		files, err := filepath.Glob(filepath.Join(input, "*-"+name))
+		if err != nil || len(files) != 1 {
+			return nil, os.ErrNotExist
+		}
+		return os.ReadFile(files[0])
+	}
+	for _, name := range []string{"state.json", "seatgeek.json", "skiddle.json", "integrations.json"} {
+		data, err := read(name)
 		if err != nil {
 			t.Fatal("private fixture unavailable")
 		}
-		if os.WriteFile(filepath.Join(dir, pair[1]), data, 0600) != nil {
+		if os.WriteFile(filepath.Join(dir, name), data, 0600) != nil {
 			t.Fatal("private replay write failed")
 		}
+	}
+	if _, err := LoadDeliveries(dir); err != nil {
+		t.Fatal("private integration state did not load")
 	}
 	s, err := Load(dir)
 	if err != nil {
@@ -148,11 +162,13 @@ func TestPrivateScanReplay(t *testing.T) {
 	}
 	c := DefaultConfig()
 	c.Username = "private-replay"
-	if at := strings.LastIndex(s.Scope, "|["); at >= 0 {
-		var identity struct{ User string }
-		if json.Unmarshal([]byte(s.Scope[:at]), &identity) == nil && identity.User != "" {
-			c.Username = identity.User
-		}
+	identityConfig := s.LookupConfig
+	if at := strings.LastIndex(s.Scope, "|["); identityConfig == "" && at >= 0 {
+		identityConfig = s.Scope[:at]
+	}
+	var identity struct{ User string }
+	if json.Unmarshal([]byte(identityConfig), &identity) == nil && identity.User != "" {
+		c.Username = identity.User
 	}
 	c.ExcludeUncredited = s.Direct.Ready
 	c.DirectReady = s.Direct.Ready
@@ -170,7 +186,7 @@ func TestPrivateScanReplay(t *testing.T) {
 	// Render at the snapshot date rather than making network requests or moving events.
 	now := time.Unix(s.RenderedAt, 0)
 	events := Events(s, c, c.EventNamespace(), now, true)
-	if raw, readErr := os.ReadFile(filepath.Join(input, "2-music-concerts.ics")); readErr == nil {
+	if raw, readErr := read("music-concerts.ics"); readErr == nil {
 		ics := strings.ReplaceAll(strings.ReplaceAll(string(raw), "\r\n ", ""), "\n ", "")
 		ids := map[string]bool{}
 		for _, line := range strings.Split(ics, "\n") {
@@ -196,6 +212,15 @@ func TestPrivateScanReplay(t *testing.T) {
 		if os.WriteFile(output, html, 0600) != nil {
 			t.Fatal("private replay report could not be written")
 		}
+	}
+	s.Direct.ScanDue(now, true)
+	s.Problem = "Checking directly credited music"
+	if err := Save(dir, s, c, now); err != nil {
+		t.Fatal("could not publish during credit recheck")
+	}
+	icsFile, err := os.ReadFile(filepath.Join(dir, "music-concerts.ics"))
+	if err != nil || string(icsFile) != string(CalendarICS(events, now)) {
+		t.Fatal("credit recheck changed the published calendar")
 	}
 	queued := func(state TicketmasterState) int {
 		n := 0

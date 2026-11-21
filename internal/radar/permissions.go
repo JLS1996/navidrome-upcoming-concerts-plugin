@@ -12,14 +12,14 @@ func AccessibleLibraries(raw string, granted []int) ([]int, error) {
 	var envelope struct {
 		Response struct {
 			Status  string `json:"status"`
-			Folders struct {
+			Folders *struct {
 				Items []struct {
 					ID int `json:"id"`
 				} `json:"musicFolder"`
 			} `json:"musicFolders"`
 		} `json:"subsonic-response"`
 	}
-	if json.Unmarshal([]byte(raw), &envelope) != nil || envelope.Response.Status != "ok" {
+	if json.Unmarshal([]byte(raw), &envelope) != nil || envelope.Response.Status != "ok" || envelope.Response.Folders == nil {
 		return nil, fmt.Errorf("unable to verify the granted user's current library access")
 	}
 	allowed := map[int]bool{}
