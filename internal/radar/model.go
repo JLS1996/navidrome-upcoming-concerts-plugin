@@ -50,26 +50,27 @@ type Entry struct {
 	Failures     int       `json:"failures,omitempty"`
 }
 type State struct {
-	LookupConfig        string             `json:"lookupConfig,omitempty"`
-	Skiddle             *SkiddleState      `json:"-"`
-	SeatGeek            *SeatGeekState     `json:"-"`
-	Ticketmaster        *TicketmasterState `json:"-"`
-	Direct              CreditInventory    `json:"directCredits,omitempty"`
-	MusicBrainzFailures int                `json:"musicBrainzFailures,omitempty"`
-	MusicBrainzProblem  string             `json:"musicBrainzProblem,omitempty"`
-	IntegrationProblem  string             `json:"integrationProblem,omitempty"`
-	RefreshToggle       *bool              `json:"refreshToggle,omitempty"`
-	RefreshPending      bool               `json:"refreshPending,omitempty"`
-	NextDiscovery       int64              `json:"nextDiscovery,omitempty"`
-	RenderedAt          int64              `json:"renderedAt"`
-	ViewConfig          string             `json:"viewConfig"`
-	Schema              int                `json:"schema"`
-	DiscoveredAt        int64              `json:"discoveredAt"`
-	Scope               string             `json:"scope"`
-	Entries             []Entry            `json:"entries"`
-	Cursor              int                `json:"cursor"`
-	NextHTTP            int64              `json:"nextHttp"`
-	Problem             string             `json:"problem,omitempty"`
+	LookupConfig           string             `json:"lookupConfig,omitempty"`
+	Skiddle                *SkiddleState      `json:"-"`
+	SeatGeek               *SeatGeekState     `json:"-"`
+	Ticketmaster           *TicketmasterState `json:"-"`
+	Direct                 CreditInventory    `json:"directCredits,omitempty"`
+	MusicBrainzFailures    int                `json:"musicBrainzFailures,omitempty"`
+	MusicBrainzProblem     string             `json:"musicBrainzProblem,omitempty"`
+	IntegrationProblem     string             `json:"integrationProblem,omitempty"`
+	RefreshToggle          *bool              `json:"refreshToggle,omitempty"`
+	ProviderRefreshPending uint8              `json:"providerRefreshPending,omitempty"`
+	RefreshPending         bool               `json:"refreshPending,omitempty"`
+	NextDiscovery          int64              `json:"nextDiscovery,omitempty"`
+	RenderedAt             int64              `json:"renderedAt"`
+	ViewConfig             string             `json:"viewConfig"`
+	Schema                 int                `json:"schema"`
+	DiscoveredAt           int64              `json:"discoveredAt"`
+	Scope                  string             `json:"scope"`
+	Entries                []Entry            `json:"entries"`
+	Cursor                 int                `json:"cursor"`
+	NextHTTP               int64              `json:"nextHttp"`
+	Problem                string             `json:"problem,omitempty"`
 }
 type Config struct {
 	ProviderAutoMatch   bool
@@ -156,8 +157,8 @@ func (s *State) Reconcile(artists []Artist, c Config, scope string, now time.Tim
 		if !ok || a.Name != e.Artist.Name || mbid != e.Artist.MBID {
 			e = Entry{}
 		}
-		// Do not restart unfinished pagination during the daily library refresh.
-		if ok && a.Name == e.Artist.Name && mbid == e.Artist.MBID && (e.Phase == "match" || e.Phase == "releases") {
+		// Keep unfinished work during routine discovery. A manual refresh resets retries.
+		if !s.RefreshPending && ok && a.Name == e.Artist.Name && mbid == e.Artist.MBID && (e.Phase == "releases" || e.Phase == "match" && c.AutoMatch) {
 			a.MBID = mbid
 			e.Artist = a
 			entries = append(entries, e)
@@ -180,6 +181,9 @@ func (s *State) Reconcile(artists []Artist, c Config, scope string, now time.Tim
 		e.Pending = nil
 		e.Failures = 0
 		e.RetryAt = 0
+		if e.Phase != "unresolved" {
+			e.Problem = ""
+		}
 		entries = append(entries, e)
 	}
 	s.Schema = 1
@@ -199,7 +203,7 @@ func ParseArtists(raw string) ([]Artist, error) {
 				Message string `json:"message"`
 				Code    int    `json:"code"`
 			} `json:"error"`
-			Artists struct {
+			Artists *struct {
 				Index []struct {
 					Artist []Artist `json:"artist"`
 				} `json:"index"`
@@ -215,6 +219,9 @@ func ParseArtists(raw string) ([]Artist, error) {
 			return []Artist{}, nil
 		}
 		return nil, fmt.Errorf("Navidrome: %s", envelope.Response.Error.Message)
+	}
+	if envelope.Response.Artists == nil {
+		return nil, fmt.Errorf("Navidrome artist list is missing")
 	}
 	out := []Artist{}
 	for _, idx := range envelope.Response.Artists.Index {
@@ -343,6 +350,18 @@ func visibleReleases(s State, c Config, now time.Time) []reportRelease {
 	}
 	return visible
 }
+
+// Extend a known start date only with a valid, exact end date.
+func (r Release) dateRange() (start, end time.Time, ok bool) {
+	start, end, ok = DateInterval(r.Date)
+	if ok && len(r.Date) == 10 && r.Concert != nil {
+		if last, _, valid := DateInterval(r.Concert.EndDate); valid && len(r.Concert.EndDate) == 10 && !last.Before(start) {
+			end = last
+		}
+	}
+	return
+}
+
 func Visible(r Release, c Config, now time.Time) bool {
 	if r.Cancelled && r.Concert == nil {
 		return false
@@ -351,14 +370,9 @@ func Visible(r Release, c Config, now time.Time) bool {
 		if r.Date == "" && r.Concert != nil {
 			return true
 		}
-		start, end, ok := DateInterval(r.Date)
+		start, end, ok := r.dateRange()
 		if !ok {
 			return false
-		}
-		if r.Concert != nil {
-			if last, _, valid := DateInterval(r.Concert.EndDate); valid && !last.Before(start) {
-				end = last
-			}
 		}
 		today := now.UTC().Truncate(24 * time.Hour)
 		return !end.Before(today.AddDate(0, 0, -c.PastDays)) && !start.After(today.AddDate(0, 0, c.AheadDays))

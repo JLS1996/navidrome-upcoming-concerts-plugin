@@ -25,6 +25,7 @@ with sync_playwright() as p:
             const rows = document.querySelectorAll('article.concert');
             rows[0].dataset.date = '2026-10-30';
             rows[0].dataset.endDate = '2026-12-02';
+            rows[0].querySelector('h2 a').removeAttribute('href');
             document.querySelector('article.concert[data-date="2026-12-04"]').dataset.date = '';
         }""")
         page.get_by_role('button',name='Calendar',exact=True).click()
@@ -32,6 +33,8 @@ with sync_playwright() as p:
         assert page.locator('#uncertain-list .uncertain-item').count()==1
         page.locator('#month-grid button[data-date="2026-11-20"]').click()
         assert page.locator('#day-concert-list article').count()==1
+        assert page.locator('#day-concert-list span.day-concert-title').count()==1
+        assert 'Source: MusicBrainz' in page.locator('#day-concert-list').inner_text()
         page.locator('#next-month').click()
         assert page.locator('#month-grid .has-concerts').count()==2
         assert page.locator('#uncertain-list .uncertain-item').count()==2

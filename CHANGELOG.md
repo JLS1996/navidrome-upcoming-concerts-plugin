@@ -11,6 +11,15 @@
 - Add native and browser regressions for calendar payloads, cache repair, shared
   URLs, multi-day display and undated concerts.
 
+- Keep authorized provider concerts in the dashboard and ICS during artist-credit
+  rescans. Carry manual refreshes through those scans, and keep healthy sources
+  available if another provider cache needs recovery.
+- Hide reports when access cannot be verified. Reuse the cached scan after the
+  same user and library grants are confirmed again.
+- Show concert details and provider attribution in the selected-day view.
+  When a listing URL is unavailable, display the title as text and omit the
+  URL property from calendar exports.
+
 ## 0.4.0 — 2026-11-20
 
 First public release of the concerts plugin.

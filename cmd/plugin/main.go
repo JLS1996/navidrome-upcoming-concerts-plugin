@@ -162,14 +162,26 @@ func (p *plugin) tick() error {
 		}
 		return radar.Save(dir, s, c, now)
 	}
-	deny := func(problem error) error { s = radar.State{Schema: 1}; return finish(problem) }
+	hideUntilVerified := func(problem error) error {
+		// The prior snapshot stays private in storage and can only be published
+		// again after its access scope has been reverified.
+		if s.Problem == problem.Error() && s.RenderedAt == 0 {
+			return nil
+		}
+		if err := radar.SaveReports(dir, radar.State{Problem: problem.Error()}, c, now); err != nil {
+			return err
+		}
+		s.Problem = problem.Error()
+		s.RenderedAt = 0
+		return radar.SaveState(dir, s)
+	}
 	if configErr != nil {
 		// A typo in settings must not erase the last valid library snapshot.
 		return configErr
 	}
 	users, err := host.Users()
 	if err != nil {
-		return deny(fmt.Errorf("unable to verify granted user access"))
+		return hideUntilVerified(fmt.Errorf("unable to verify granted user access"))
 	}
 	granted := make([]string, 0, len(users))
 	for _, u := range users {
@@ -184,7 +196,7 @@ func (p *plugin) tick() error {
 	ic = integrationConfig(c)
 	libs, err := host.Libraries()
 	if err != nil {
-		return deny(fmt.Errorf("unable to verify granted library access"))
+		return hideUntilVerified(fmt.Errorf("unable to verify granted library access"))
 	}
 	ids := []int{}
 	for _, l := range libs {
@@ -192,11 +204,11 @@ func (p *plugin) tick() error {
 	}
 	rawFolders, err := host.Subsonic("getMusicFolders?u=" + url.QueryEscape(c.Username))
 	if err != nil {
-		return deny(fmt.Errorf("unable to verify current user library access"))
+		return hideUntilVerified(fmt.Errorf("unable to verify current user library access"))
 	}
 	ids, err = radar.AccessibleLibraries(rawFolders, ids)
 	if err != nil {
-		return deny(err)
+		return hideUntilVerified(err)
 	}
 	scope := radar.AccessScope(c.Username, ids)
 	if s.LookupConfig == "" && radar.SameAccessScope(s.Scope, c.Username, ids) {
@@ -218,14 +230,23 @@ func (p *plugin) tick() error {
 		s.RefreshPending = true
 		s.NextDiscovery = 0
 	}
+	// Only publish provider caches after verifying the current access scope.
+	providers, providerProblems := loadProviders(dir, &s, c, ids, scope)
 	c.DirectReady, c.DirectCredits = s.Direct.Ready, s.Direct.Credits
+	previousProviderRefresh := s.ProviderRefreshPending
+	var enabledProviders uint8
+	for _, provider := range providers {
+		enabledProviders |= provider.bit
+	}
+	s.ProviderRefreshPending &= enabledProviders
 	refreshChanged := s.ApplyRefresh(str("manual_refresh", "false") == "true")
 	if refreshChanged {
-		s.Direct.At = 0
+		s.Direct.Refresh = true
+		s.ProviderRefreshPending = enabledProviders
 	}
 	if c.ExcludeUncredited {
 		c.DirectReady, c.DirectCredits = s.Direct.Ready, s.Direct.Credits
-		if s.Direct.ScanDue(now, refreshChanged) && now.Unix() >= s.Direct.RetryAt {
+		if s.Direct.ScanDue(now, s.Direct.Refresh) && now.Unix() >= s.Direct.RetryAt {
 			q := url.Values{"u": {c.Username}}
 			for _, id := range ids {
 				q.Add("musicFolderId", strconv.Itoa(id))
@@ -253,15 +274,27 @@ func (p *plugin) tick() error {
 				return finish(fmt.Errorf("direct-credit scan failed: %v; retrying in one minute", scanErr))
 			}
 			if !complete {
+				if !refreshChanged && strings.HasPrefix(s.Problem, "Checking directly credited music:") && now.Unix()-s.RenderedAt < 30 {
+					return radar.SaveState(dir, s)
+				}
 				return finish(fmt.Errorf("Checking directly credited music: %d albums and %d tracks scanned; integrations are paused", s.Direct.Albums, s.Direct.Tracks))
 			}
 			c.DirectReady, c.DirectCredits = true, s.Direct.Credits
 		}
 		if s.Direct.Phase != "" {
-			return finish(fmt.Errorf("Direct-credit scan is waiting to retry; integrations are paused"))
+			if refreshChanged {
+				return radar.SaveState(dir, s)
+			}
+			return nil
 		}
 	}
-	if (s.RefreshPending || now.Unix()-s.DiscoveredAt >= 86400) && now.Unix() >= s.NextDiscovery {
+	if s.RefreshPending || now.Unix()-s.DiscoveredAt >= 86400 {
+		if now.Unix() < s.NextDiscovery {
+			if refreshChanged {
+				return radar.SaveState(dir, s)
+			}
+			return nil
+		}
 		artists, err := discover(c.Username, ids)
 		if err != nil {
 			s.NextDiscovery = now.Unix() + 60
@@ -270,79 +303,40 @@ func (p *plugin) tick() error {
 		s.Reconcile(artists, c, scope, now)
 	}
 	providerChanged := false
-	if c.Ticketmaster.Enabled {
-		provider, loadErr := radar.LoadTicketmaster(dir)
-		if loadErr != nil {
-			return finish(loadErr)
+	for _, provider := range providers {
+		if provider.state == nil {
+			continue
 		}
-		providerBefore, _ := json.Marshal(provider)
-		radar.MigrateScope(&provider.Scope, c.Username, ids)
-		provider.Reconcile(s.Entries, c, c.Ticketmaster, scope, refreshChanged)
-		providerChanged, err = provider.Step(c.Ticketmaster, c, func(endpoint string) (radar.Response, error) {
-			return send(radar.HTTPRequest{Method: "GET", URL: endpoint, Headers: map[string]string{"Accept": "application/json"}})
-		}, func(state radar.TicketmasterState) error { return radar.SaveTicketmaster(dir, state) }, now)
+		before, _ := json.Marshal(provider.state)
+		next := *provider.state
+		next.Reconcile(s.Entries, c, provider.config, scope, s.ProviderRefreshPending&provider.bit != 0)
+		after, _ := json.Marshal(next)
+		if string(before) != string(after) {
+			next.Revision++
+			if err := provider.save(dir, next); err != nil {
+				providerProblems = append(providerProblems, err.Error())
+				continue
+			}
+			providerChanged = true
+		}
+		*provider.state = next
+		*provider.snapshot = provider.state
+		s.ProviderRefreshPending &^= provider.bit
+		changed, err := provider.step(provider.state, c, func(endpoint string) (radar.Response, error) {
+			return send(radar.HTTPRequest{Method: "GET", URL: endpoint, Headers: map[string]string{
+				"Accept": "application/json", "User-Agent": radar.MusicBrainzUserAgent(),
+			}})
+		}, func(state radar.TicketmasterState) error { return provider.save(dir, state) }, now)
 		if err != nil {
-			return finish(err)
+			providerProblems = append(providerProblems, err.Error())
 		}
-		providerAfter, _ := json.Marshal(provider)
-		if !providerChanged && string(providerBefore) != string(providerAfter) {
-			if err = radar.SaveTicketmaster(dir, provider); err != nil {
-				return finish(err)
-			}
-		}
-		s.Ticketmaster = &provider
-	}
-	if c.SeatGeek.Enabled {
-		provider, loadErr := radar.LoadSeatGeek(dir)
-		if loadErr != nil {
-			return finish(loadErr)
-		}
-		before, _ := json.Marshal(provider)
-		radar.MigrateScope(&provider.Scope, c.Username, ids)
-		provider.Reconcile(s.Entries, c, c.SeatGeek.QueueConfig(), scope, refreshChanged)
-		sgChanged, stepErr := provider.StepSeatGeek(c.SeatGeek, c, func(endpoint string) (radar.Response, error) {
-			return send(radar.HTTPRequest{Method: "GET", URL: endpoint, Headers: map[string]string{"Accept": "application/json"}})
-		}, func(state radar.SeatGeekState) error { return radar.SaveSeatGeek(dir, state) }, now)
-		if stepErr != nil {
-			return finish(stepErr)
-		}
-		after, _ := json.Marshal(provider)
-		if !sgChanged && string(before) != string(after) {
-			if err = radar.SaveSeatGeek(dir, provider); err != nil {
-				return finish(err)
-			}
-		}
-		s.SeatGeek = &provider
-		providerChanged = providerChanged || sgChanged
-	}
-	if c.Skiddle.Enabled {
-		provider, loadErr := radar.LoadSkiddle(dir)
-		if loadErr != nil {
-			return finish(loadErr)
-		}
-		before, _ := json.Marshal(provider)
-		radar.MigrateScope(&provider.Scope, c.Username, ids)
-		provider.Reconcile(s.Entries, c, c.Skiddle.QueueConfig(), scope, refreshChanged)
-		skChanged, stepErr := provider.StepSkiddle(c.Skiddle, c, func(endpoint string) (radar.Response, error) {
-			return send(radar.HTTPRequest{Method: "GET", URL: endpoint, Headers: map[string]string{"Accept": "application/json", "User-Agent": radar.MusicBrainzUserAgent()}})
-		}, func(state radar.SkiddleState) error { return radar.SaveSkiddle(dir, state) }, now)
-		if stepErr != nil {
-			return finish(stepErr)
-		}
-		after, _ := json.Marshal(provider)
-		if !skChanged && string(before) != string(after) {
-			if err = radar.SaveSkiddle(dir, provider); err != nil {
-				return finish(err)
-			}
-		}
-		s.Skiddle = &provider
-		providerChanged = providerChanged || skChanged
+		providerChanged = providerChanged || changed
 	}
 	previousProblem := s.Problem
 	if s.NextDiscovery == 0 {
-		s.Problem = ""
+		s.Problem = strings.Join(providerProblems, " · ")
 	}
-	view := radar.Version + "/" + fmt.Sprintf("%d/%d", c.AheadDays, c.PastDays) + fmt.Sprint(c.Skiddle.Enabled, c.SeatGeek.Enabled, c.DeduplicateConcerts, c.Ticketmaster.Enabled, c.Theme, c.ProviderAutoMatch, c.ExcludeUncredited, s.Direct.At) + ic.Fingerprint() + radar.ProviderPublicationVersion(s, c)
+	view := radar.Version + "/report-2/" + fmt.Sprintf("%d/%d", c.AheadDays, c.PastDays) + fmt.Sprint(c.Skiddle.Enabled, c.SeatGeek.Enabled, c.DeduplicateConcerts, c.Ticketmaster.Enabled, c.Theme, c.ProviderAutoMatch, c.ExcludeUncredited, s.Direct.At) + ic.Fingerprint() + radar.ProviderPublicationVersion(s, c)
 	viewChanged := s.ViewConfig != view
 	s.ViewConfig = view
 	d, loadErr := radar.LoadDeliveries(dir)
@@ -378,11 +372,59 @@ func (p *plugin) tick() error {
 	}
 
 	// Avoid rewriting the dashboard every idle tick. Render at least hourly for date windows.
-	if !providerChanged && !refreshChanged && !changed && !deliveryChanged && !viewChanged && previousProblem == "" && previousIntegrationProblem == s.IntegrationProblem && s.DiscoveredAt != now.Unix() && now.Unix()-s.RenderedAt < 3600 {
+	if !providerChanged && !refreshChanged && !changed && !deliveryChanged && !viewChanged && previousProblem == s.Problem && previousProviderRefresh == s.ProviderRefreshPending && previousIntegrationProblem == s.IntegrationProblem && s.DiscoveredAt != now.Unix() && now.Unix()-s.RenderedAt < 3600 {
 		return nil
 	}
 	return finish(nil)
 }
+
+// The concert providers share a persistent queue, but load and advance independently.
+type concertProvider struct {
+	bit      uint8
+	config   radar.TicketmasterConfig
+	load     func(string) (radar.TicketmasterState, error)
+	save     func(string, radar.TicketmasterState) error
+	step     func(*radar.TicketmasterState, radar.Config, radar.Fetch, func(radar.TicketmasterState) error, time.Time) (bool, error)
+	state    *radar.TicketmasterState
+	snapshot **radar.TicketmasterState
+}
+
+func loadProviders(dir string, s *radar.State, c radar.Config, ids []int, scope string) ([]concertProvider, []string) {
+	providers := []concertProvider{
+		{bit: 1, snapshot: &s.Ticketmaster, config: c.Ticketmaster, load: radar.LoadTicketmaster, save: radar.SaveTicketmaster,
+			step: func(p *radar.TicketmasterState, c radar.Config, fetch radar.Fetch, save func(radar.TicketmasterState) error, now time.Time) (bool, error) {
+				return p.Step(c.Ticketmaster, c, fetch, save, now)
+			}},
+		{bit: 2, snapshot: &s.SeatGeek, config: c.SeatGeek.QueueConfig(), load: radar.LoadSeatGeek, save: radar.SaveSeatGeek,
+			step: func(p *radar.TicketmasterState, c radar.Config, fetch radar.Fetch, save func(radar.TicketmasterState) error, now time.Time) (bool, error) {
+				return p.StepSeatGeek(c.SeatGeek, c, fetch, save, now)
+			}},
+		{bit: 4, snapshot: &s.Skiddle, config: c.Skiddle.QueueConfig(), load: radar.LoadSkiddle, save: radar.SaveSkiddle,
+			step: func(p *radar.TicketmasterState, c radar.Config, fetch radar.Fetch, save func(radar.TicketmasterState) error, now time.Time) (bool, error) {
+				return p.StepSkiddle(c.Skiddle, c, fetch, save, now)
+			}},
+	}
+	var problems []string
+	enabled := providers[:0]
+	for _, p := range providers {
+		if !p.config.Enabled {
+			continue
+		}
+		state, err := p.load(dir)
+		if err != nil {
+			problems = append(problems, err.Error())
+		} else {
+			p.state = &state
+			radar.MigrateScope(&state.Scope, c.Username, ids)
+			if state.Scope == scope {
+				*p.snapshot = &state
+			}
+		}
+		enabled = append(enabled, p)
+	}
+	return enabled, problems
+}
+
 func discover(username string, ids []int) ([]radar.Artist, error) {
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("no verified libraries were selected")
