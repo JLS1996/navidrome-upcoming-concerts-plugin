@@ -18,6 +18,27 @@ with sync_playwright() as p:
         page.get_by_role('button',name='Calendar',exact=True).click()
         assert page.locator('#month-grid button').count()>=28
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),width
+        # Reuse fixture rows to exercise ranges crossing month boundaries and
+        # fully undated concerts without adding personal/provider data.
+        page.get_by_role('button',name='List',exact=True).click()
+        page.evaluate("""() => {
+            const rows = document.querySelectorAll('article.concert');
+            rows[0].dataset.date = '2026-10-30';
+            rows[0].dataset.endDate = '2026-12-02';
+            document.querySelector('article.concert[data-date="2026-12-04"]').dataset.date = '';
+        }""")
+        page.get_by_role('button',name='Calendar',exact=True).click()
+        assert page.locator('#month-grid .has-concerts').count()==30
+        assert page.locator('#uncertain-list .uncertain-item').count()==1
+        page.locator('#month-grid button[data-date="2026-11-20"]').click()
+        assert page.locator('#day-concert-list article').count()==1
+        page.locator('#next-month').click()
+        assert page.locator('#month-grid .has-concerts').count()==2
+        assert page.locator('#uncertain-list .uncertain-item').count()==2
+        page.locator('#search').fill('nonexistent concert')
+        assert page.locator('#month-grid .has-concerts').count()==0
+        assert page.locator('#uncertain-list .uncertain-item').count()==0
+        page.locator('#search').fill('')
         page.screenshot(path=str(root/f'dist/preview-{width}.png'),full_page=True)
         assert not errors,errors
         page.close()

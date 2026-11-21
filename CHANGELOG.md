@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Preserve multi-day ranges and cancellation status in Google Calendar sync;
+  repair existing managed exports once without changing event identities.
+- Keep each concert's details and attribution separate when source URLs match or
+  are unavailable.
+- Show multi-day concerts on every affected calendar day, including ranges that
+  cross months; retain fully undated shows in the uncertain-date list.
+- Add native and browser regressions for calendar payloads, cache repair, shared
+  URLs, multi-day display and undated concerts.
+
 ## 0.4.0 — 2026-11-20
 
 First public release of the concerts plugin.

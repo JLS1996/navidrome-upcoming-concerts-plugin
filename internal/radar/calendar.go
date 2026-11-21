@@ -119,15 +119,21 @@ func foldICS(s string) string {
 	out.WriteString("\r\n")
 	return out.String()
 }
+
+// Calendar end dates are exclusive; provider end dates are inclusive.
+func (e CalendarEvent) exclusiveEnd(start time.Time) time.Time {
+	if last, _, ok := DateInterval(e.EndDate); ok && len(e.EndDate) == 10 && !last.Before(start) {
+		return last.AddDate(0, 0, 1)
+	}
+	return start.AddDate(0, 0, 1)
+}
+
 func EventICS(e CalendarEvent, now time.Time) string {
 	t, _, valid := DateInterval(e.Date)
 	if !valid || len(e.Date) != 10 {
 		return ""
 	}
-	end := t.AddDate(0, 0, 1)
-	if last, _, ok := DateInterval(e.EndDate); ok && len(e.EndDate) == 10 && !last.Before(t) {
-		end = last.AddDate(0, 0, 1)
-	}
+	end := e.exclusiveEnd(t)
 	lines := []string{"BEGIN:VEVENT", "UID:" + icsEscape(e.UID), "DTSTAMP:" + now.UTC().Format("20060102T150405Z"), "DTSTART;VALUE=DATE:" + t.Format("20060102"), "DTEND;VALUE=DATE:" + end.Format("20060102"), "SUMMARY:" + icsEscape(e.Summary), "DESCRIPTION:" + icsEscape(e.Description), "URL:" + icsEscape(e.URL), "TRANSP:TRANSPARENT", "END:VEVENT"}
 	if e.Status == "CANCELLED" {
 		lines = append(lines[:len(lines)-1], "STATUS:CANCELLED", "END:VEVENT")

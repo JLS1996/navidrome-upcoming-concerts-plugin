@@ -291,7 +291,7 @@ func (d *DeliveryState) calendarStep(s State, c Config, ic IntegrationConfig, se
 			record = &RemoteEvent{Event: e, Phase: "get"}
 			d.Remote[uid] = record
 		}
-		if wanted && record.Hash == e.Fingerprint() && record.Phase == "" {
+		if wanted && record.Hash == calendarFingerprint(e, ic.CalendarProvider) && record.Phase == "" {
 			continue
 		}
 		if !wanted && !record.Present && record.Phase == "" {
@@ -391,6 +391,16 @@ func (d *DeliveryState) caldavOp(uid string, e CalendarEvent, wanted bool, r *Re
 	}
 	d.failure("calendar", resp, nil, now)
 }
+
+// Version Google payload hashes so existing one-day exports are repaired once,
+// without changing event IDs or notification acknowledgements.
+func calendarFingerprint(e CalendarEvent, provider string) string {
+	if provider == "google" {
+		return digest("google-v2\x00" + e.Fingerprint())
+	}
+	return e.Fingerprint()
+}
+
 func googleID(uid string) string { return "rr" + digest(uid) } // Hex is a valid subset of Google's base32hex alphabet.
 func (d *DeliveryState) googleOp(uid string, e CalendarEvent, wanted bool, r *RemoteEvent, ic IntegrationConfig, send Send, now time.Time) {
 	collection := googleAPI + "/calendars/" + url.PathEscape(ic.GoogleCalendarID) + "/events"
@@ -405,7 +415,12 @@ func (d *DeliveryState) googleOp(uid string, e CalendarEvent, wanted bool, r *Re
 		headers["If-Match"] = r.ETag
 	} else {
 		start, _, _ := DateInterval(e.Date)
-		payload := map[string]any{"summary": e.Summary, "description": e.Description + "\n" + e.URL, "start": map[string]string{"date": e.Date}, "end": map[string]string{"date": start.AddDate(0, 0, 1).Format("2006-01-02")}, "transparency": "transparent", "extendedProperties": map[string]any{"private": map[string]string{"concertRadarUID": uid, "concertRadarHash": e.Fingerprint()}}}
+		payload := map[string]any{"summary": e.Summary, "description": e.Description + "\n" + e.URL, "start": map[string]string{"date": e.Date}, "end": map[string]string{"date": e.exclusiveEnd(start).Format("2006-01-02")}, "transparency": "transparent", "extendedProperties": map[string]any{"private": map[string]string{"concertRadarUID": uid, "concertRadarHash": calendarFingerprint(e, "google")}}}
+		payload["status"] = "confirmed"
+		if e.Status == "CANCELLED" {
+			payload["status"] = "cancelled"
+		}
+
 		if r.Present {
 			req.Method = "PATCH"
 			headers["If-Match"] = r.ETag
@@ -458,10 +473,10 @@ func (d *DeliveryState) googleOp(uid string, e CalendarEvent, wanted bool, r *Re
 			}
 			r.ETag = remote.ETag
 			r.Present = true
-			if wanted && remote.Extended.Private["concertRadarHash"] == e.Fingerprint() {
+			if wanted && remote.Extended.Private["concertRadarHash"] == calendarFingerprint(e, "google") {
 				r.Phase = ""
 				r.Event = e
-				r.Hash = e.Fingerprint()
+				r.Hash = calendarFingerprint(e, "google")
 			} else {
 				r.Phase = "write"
 			}
@@ -492,7 +507,7 @@ func (d *DeliveryState) googleOp(uid string, e CalendarEvent, wanted bool, r *Re
 			r.ETag = result.ETag
 			r.Present = true
 			r.Event = e
-			r.Hash = e.Fingerprint()
+			r.Hash = calendarFingerprint(e, "google")
 			r.Phase = ""
 			delete(d.Problems, "calendar")
 			return
