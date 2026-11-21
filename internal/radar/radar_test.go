@@ -322,7 +322,7 @@ func TestTransientOutageRetriesGloballyAndRecovers(t *testing.T) {
 				at = time.Unix(s.NextHTTP, 0)
 			}
 			b, _ := Render(s, cfg(), at)
-			if !strings.Contains(string(b), "automatic retry after") || strings.Contains(string(b), "artists need attention") {
+			if !strings.Contains(string(b), "Automatic retry after") || strings.Contains(string(b), "MusicBrainz issues (") {
 				t.Fatal("service outage presented as artist problem")
 			}
 			s.Step(func(u string) (Response, error) {
@@ -361,7 +361,7 @@ func TestOldTransientErrorsResumeWithoutDiscardingSnapshots(t *testing.T) {
 	}
 }
 
-func TestEmptyReportHasValidDownloadAndTextFallback(t *testing.T) {
+func TestEmptyReportEmbedsValidCalendarWithoutOfferingDownload(t *testing.T) {
 	b, err := Render(State{Schema: 1}, cfg(), testNow)
 	if err != nil {
 		t.Fatal(err)
@@ -380,8 +380,8 @@ func TestEmptyReportHasValidDownloadAndTextFallback(t *testing.T) {
 	if !strings.HasPrefix(string(calendar), "BEGIN:VCALENDAR\r\n") || !strings.HasSuffix(string(calendar), "END:VCALENDAR\r\n") || strings.Contains(string(calendar), "BEGIN:VEVENT") {
 		t.Fatal("invalid empty calendar")
 	}
-	if !strings.Contains(document, "Importing this calendar will add nothing.") || !strings.Contains(document, html.EscapeString(string(calendar))) || !strings.Contains(document, "Show calendar text") {
-		t.Fatal("empty calendar has no text fallback")
+	if !strings.Contains(document, `id="calendar-export" hidden`) || !strings.Contains(document, html.EscapeString(string(calendar))) {
+		t.Fatal("empty calendar should be embedded with its export controls hidden")
 	}
 }
 

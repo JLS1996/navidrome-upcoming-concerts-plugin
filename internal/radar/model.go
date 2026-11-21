@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const Version = "0.4.1"
+const Version = "0.5.0"
 
 func MusicBrainzUserAgent() string {
 	return "navidrome-upcoming-concerts-plugin/" + Version + " (https://github.com/JLS1996/navidrome-upcoming-concerts-plugin)"
@@ -34,6 +34,7 @@ type Release struct {
 	ID        string   `json:"id"`
 	Title     string   `json:"title"`
 	Date      string   `json:"first-release-date"`
+	EndDate   string   `json:"endDate,omitempty"`
 	Type      string   `json:"primary-type"`
 	Secondary []string `json:"secondary-types"`
 }
@@ -354,12 +355,26 @@ func visibleReleases(s State, c Config, now time.Time) []reportRelease {
 // Extend a known start date only with a valid, exact end date.
 func (r Release) dateRange() (start, end time.Time, ok bool) {
 	start, end, ok = DateInterval(r.Date)
-	if ok && len(r.Date) == 10 && r.Concert != nil {
-		if last, _, valid := DateInterval(r.Concert.EndDate); valid && len(r.Concert.EndDate) == 10 && !last.Before(start) {
+	if endDate := r.endDate(); ok && len(r.Date) == 10 && len(endDate) == 10 {
+		if last, _, valid := DateInterval(endDate); valid && !last.Before(start) {
 			end = last
 		}
 	}
 	return
+}
+
+func (r Release) endDate() string {
+	if r.Concert != nil {
+		return r.Concert.EndDate
+	}
+	return r.EndDate
+}
+
+func (r Release) lastDay() string {
+	if _, end, ok := r.dateRange(); ok && len(r.Date) == 10 {
+		return end.Format(time.DateOnly)
+	}
+	return ""
 }
 
 func Visible(r Release, c Config, now time.Time) bool {

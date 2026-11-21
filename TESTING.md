@@ -7,8 +7,9 @@ Go 1.25.4 and TinyGo 0.40.1.
 
 - Native race tests and static analysis; radar coverage above 86%.
 - Production WASM package build and source/package privacy checks.
-- Offline dashboard search, calendar and provider attribution checks in Chromium
-  at 320, 768 and 1280 px, including offline cache-compatibility replay.
+- Offline agenda, calendar keyboard navigation, combined filters, provider
+  attribution and full ICS download in Chromium at 320, 768 and 1280 px.
+  Offline cache-compatibility replay also verifies report generation.
 - Actual Navidrome/WASM: authorized library enumeration, host HTTP/storage,
   automatic complete-search exact-name resolution through concert retrieval,
   independent quotas, source attribution, paging, cancellation, restart recovery,

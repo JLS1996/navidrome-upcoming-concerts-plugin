@@ -56,7 +56,7 @@ func TestSeatGeekDurablePagingTBDAndExport(t *testing.T) {
 	c := cfg()
 	c.SeatGeek = sc
 	html, _ := Render(state, c, testNow)
-	if !strings.Contains(string(html), "SeatGeek lookup status") || !strings.Contains(string(html), "Source: SeatGeek") || !strings.Contains(string(html), "https://seatgeek.com/fixture-tickets") {
+	if !strings.Contains(string(html), "SeatGeek lookup status") || !strings.Contains(string(html), `aria-label="SeatGeek listing"`) || !strings.Contains(string(html), "https://seatgeek.com/fixture-tickets") {
 		t.Fatal("missing provider presentation")
 	}
 	// Distinct event IDs remain separate even with the same venue and day.

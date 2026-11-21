@@ -119,11 +119,11 @@ try:
  wait_for(lambda:json.loads((storage/'skiddle.json').read_text())['artists'][0]['lookup']['outcome']=='found')
  state=provider();assert state['requestsReserved']==3 and len(requests)==3
  assert len(state['artists'][0]['concerts'])==2
- wait_for(lambda:(storage/'upcoming-concerts.html').read_text().count('<article class="concert"')==2 and 'Source: SeatGeek' in (storage/'upcoming-concerts.html').read_text() and 'Source: Ticketmaster' in (storage/'upcoming-concerts.html').read_text() and 'Source: Skiddle' in (storage/'upcoming-concerts.html').read_text())
+ wait_for(lambda:(storage/'upcoming-concerts.html').read_text().count('<article class="concert"')==2 and 'aria-label="SeatGeek listing"' in (storage/'upcoming-concerts.html').read_text() and 'aria-label="Ticketmaster listing"' in (storage/'upcoming-concerts.html').read_text() and 'aria-label="Skiddle listing"' in (storage/'upcoming-concerts.html').read_text())
  html=(storage/'upcoming-concerts.html').read_text()
- assert 'Fixture Hall, London, GB' in html and 'Source: Ticketmaster' in html and 'Source: SeatGeek' in html
+ assert 'Fixture Hall, London, GB' in html and 'aria-label="Ticketmaster listing"' in html and 'aria-label="SeatGeek listing"' in html
  assert html.count('<article class="concert"')==2
- assert 'Source: Skiddle' in html and 'Skiddle logo' in html
+ assert 'aria-label="Skiddle listing"' in html and 'Skiddle logo' in html
  assert len(sk_requests)==2
  assert len(sg_requests)==3
  assert '&lt;script&gt;unsafe&lt;/script&gt;' in html and '<script>unsafe</script>' not in html
@@ -148,7 +148,7 @@ try:
  api('/api/plugin/navidrome-upcoming-concerts-plugin','PUT',{'config':json.dumps(settings)})
  def cached_rescan():
   doc=(storage/'upcoming-concerts.html').read_text()
-  return 'Checking directly credited music:' in doc and 'Source: SeatGeek' in doc and 'Source: Skiddle' in doc
+  return 'Checking directly credited music:' in doc and 'aria-label="SeatGeek listing"' in doc and 'aria-label="Skiddle listing"' in doc
  wait_for(cached_rescan)
  assert (storage/'music-concerts.ics').read_text().count('BEGIN:VEVENT')==2
  wait_for(lambda:local_state().get('refreshToggle') and not local_state().get('providerRefreshPending') and 'Checking directly credited music:' not in local_state().get('problem',''))
@@ -169,11 +169,11 @@ try:
  skiddle_cache=skiddle_file.read_bytes()
  skiddle_file.write_text('{')
  wait_for(lambda:'skiddle.json is corrupt' in (storage/'upcoming-concerts.html').read_text())
- assert 'Source: SeatGeek' in (storage/'upcoming-concerts.html').read_text()
+ assert 'aria-label="SeatGeek listing"' in (storage/'upcoming-concerts.html').read_text()
  assert (storage/'music-concerts.ics').read_text().count('BEGIN:VEVENT')==2
  assert skiddle_file.read_text()=='{','damaged provider cache was overwritten'
  skiddle_file.write_bytes(skiddle_cache)
- wait_for(lambda:'Source: Skiddle' in (storage/'upcoming-concerts.html').read_text())
+ wait_for(lambda:'aria-label="Skiddle listing"' in (storage/'upcoming-concerts.html').read_text())
  # Damaged delivery state pauses integrations while local scans keep working.
  stop()
  deliveries=storage/'integrations.json'

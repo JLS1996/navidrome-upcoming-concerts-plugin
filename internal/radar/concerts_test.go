@@ -11,7 +11,7 @@ func TestConcertPipeline(t *testing.T) {
 	artist := "11111111-1111-4111-8111-111111111111"
 	event := "22222222-2222-4222-8222-222222222222"
 	e := Entry{Artist: Artist{ID: "a", Name: "Band <&>"}, ResolvedMBID: artist, Phase: "releases"}
-	body := `{"id":"` + artist + `","relations":[{"target-type":"event","event":{"id":"` + event + `","name":"Winter <show>","type":"Concert","life-span":{"begin":"2026-12-04"},"relations":[{"place":{"name":"Hall","address":"London"}}]}}]}`
+	body := `{"id":"` + artist + `","relations":[{"target-type":"event","event":{"id":"` + event + `","name":"Winter <show>","type":"Concert","life-span":{"begin":"2026-11-19","end":"2026-11-21"},"relations":[{"place":{"name":"Hall","address":"London"}}]}}]}`
 	s := State{Entries: []Entry{e}}
 	if !s.Step(func(u string) (Response, error) {
 		if !strings.Contains(u, "artist/"+artist) || !strings.Contains(u, "event-rels") {
@@ -29,7 +29,7 @@ func TestConcertPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Winter &lt;show&gt;", "Hall London", "musicbrainz.org/event/" + event, "concert"} {
+	for _, want := range []string{"Winter &lt;show&gt;", "Hall London", "musicbrainz.org/event/" + event, `data-timing="Ongoing"`, `data-end-date="2026-11-21"`} {
 		if !strings.Contains(string(html), want) {
 			t.Fatalf("missing %s", want)
 		}
@@ -39,7 +39,7 @@ func TestConcertPipeline(t *testing.T) {
 		t.Fatal(events)
 	}
 	ics := strings.ReplaceAll(string(CalendarICS(events, now)), "\r\n ", "")
-	for _, want := range []string{"DTSTART;VALUE=DATE:20261204", "Hall London", "@concert-radar"} {
+	for _, want := range []string{"DTSTART;VALUE=DATE:20261119", "DTEND;VALUE=DATE:20261122", "Hall London", "@concert-radar"} {
 		if !strings.Contains(ics, want) {
 			t.Fatal(want)
 		}

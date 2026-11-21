@@ -7,13 +7,6 @@ import (
 	"time"
 )
 
-func venueSuffix(venue string) string {
-	if venue == "" {
-		return ""
-	}
-	return " · " + venue
-}
-
 // Artist event relationships are returned as one document by MusicBrainz.
 // Commit only complete, validated responses so failed refreshes retain old results.
 func (e *Entry) concerts(data []byte, now time.Time) error {
@@ -28,6 +21,7 @@ func (e *Entry) concerts(data []byte, now time.Time) error {
 				Cancelled bool   `json:"cancelled"`
 				Life      struct {
 					Begin string `json:"begin"`
+					End   string `json:"end"`
 				} `json:"life-span"`
 				Relations []struct {
 					Place struct {
@@ -64,7 +58,11 @@ func (e *Entry) concerts(data []byte, now time.Time) error {
 				places = append(places, strings.TrimSpace(relation.Place.Name+" "+relation.Place.Address))
 			}
 		}
-		out = append(out, Release{ID: event.ID, Title: event.Name, Date: event.Life.Begin, Type: "Concert", Venue: strings.Join(places, " · ")})
+		show := Release{ID: event.ID, Title: event.Name, Date: event.Life.Begin, EndDate: event.Life.End, Type: "Concert", Venue: strings.Join(places, " · ")}
+		if last := show.lastDay(); last == show.Date || last == "" {
+			show.EndDate = ""
+		}
+		out = append(out, show)
 	}
 	e.Releases = out
 	e.Pending = nil
